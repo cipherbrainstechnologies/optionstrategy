@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""
+Script to seed instruments database with Nifty stocks.
+"""
+import sys
+import os
+import argparse
+import logging
+from pathlib import Path
+
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+from storage.db import get_db_session, init_database
+from core.config import Config
+from sqlalchemy import text
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Nifty 50 stocks
+NIFTY_50 = [
+    "RELIANCE", "TCS", "HDFCBANK", "INFY", "HINDUNILVR", "ICICIBANK", "KOTAKBANK",
+    "HDFC", "ITC", "LT", "SBIN", "BHARTIARTL", "ASIANPAINT", "AXISBANK", "MARUTI",
+    "SUNPHARMA", "TITAN", "ULTRACEMCO", "WIPRO", "NESTLEIND", "ONGC", "POWERGRID",
+    "NTPC", "TECHM", "TATAMOTORS", "TATASTEEL", "BAJFINANCE", "HCLTECH", "DRREDDY",
+    "JSWSTEEL", "TATACONSUM", "BRITANNIA", "DIVISLAB", "EICHERMOT", "GRASIM",
+    "HDFCLIFE", "HEROMOTOCO", "HINDALCO", "INDUSINDBK", "NTPC", "SBILIFE", "SHREECEM",
+    "TATACONSUM", "UPL", "WIPRO", "APOLLOHOSP", "BAJAJFINSV", "COALINDIA", "CIPLA"
+]
+
+# Nifty 100 stocks (additional 50)
+NIFTY_100_ADDITIONAL = [
+    "ADANIPORTS", "ADANITRANS", "BAJAJ-AUTO", "BAJAJHLDNG", "BANDHANBNK", "BERGEPAINT",
+    "BIOCON", "BOSCHLTD", "CADILAHC", "CHOLAFIN", "COLPAL", "CONCOR", "DABUR",
+    "DIVISLAB", "DMART", "GAIL", "GODREJCP", "GODREJPROP", "HDFCAMC", "HINDPETRO",
+    "ICICIGI", "ICICIPRULI", "IDEA", "INDIGO", "INFIBEAM", "IRCTC", "JINDALSTEL",
+    "JUBLFOOD", "LALPATHLAB", "LUPIN", "M&M", "MCDOWELL-N", "MFSL", "MINDTREE",
+    "MOTHERSON", "MRF", "MUTHOOTFIN", "NAUKRI", "PEL", "PETRONET", "PIDILITIND",
+    "PNB", "PVR", "RBLBANK", "SAIL", "SIEMENS", "SRF", "TATAPOWER", "TORNTPHARM",
+    "VEDL", "YESBANK", "ZEEL", "ZOMATO"
+]
+
+# Nifty 500 stocks (sample - would need complete list)
+NIFTY_500_SAMPLE = [
+    "ABB", "ACC", "ADANIGREEN", "ADANIPOWER", "AJANTPHARM", "ALBK", "AMBUJACEM",
+    "APOLLOTYRE", "ASHOKLEY", "AUROPHARMA", "BALRAMCHIN", "BANKBARODA", "BATAINDIA",
+    "BEL", "BEML", "BHEL", "BPCL", "CANFINHOME", "CENTRALBK", "CESC", "CGPOWER",
+    "CHAMBLFERT", "CIPLA", "COCHINSHIP", "CUMMINSIND", "DALBHARAT", "DCBBANK",
+    "DHFL", "DISHTV", "DLF", "EDELWEISS", "EXIDEIND", "FEDERALBNK", "FORTIS",
+    "GLENMARK", "GMRINFRA", "GODREJIND", "GRANULES", "HATHWAY", "HEG", "HEXAWARE",
+    "HINDUJAVENT", "HUDCO", "IBREALEST", "IDBI", "IDFCFIRSTB", "IGL", "INDIANB",
+    "IOC", "IPCALAB", "JKCEMENT", "JUBLPHARMA", "JUSTDIAL", "KAJARIA", "KANSAINER",
+    "KOTAKBANK", "L&TFH", "LICHSGFIN", "LTTS", "LUXIND", "MANAPPURAM", "MARICO",
+    "MCDOWELL-N", "MFSL", "MINDTREE", "MOTHERSON", "MRF", "MUTHOOTFIN", "NAUKRI",
+    "NMDC", "OBEROI", "OFSS", "OIL", "PAGEIND", "PEL", "PETRONET", "PIDILITIND",
+    "PNB", "PVR", "RBLBANK", "RECLTD", "RELAXO", "SAIL", "SIEMENS", "SRF",
+    "TATAPOWER", "TORNTPHARM", "TRENT", "TVSMOTORS", "UBL", "VEDL", "VOLTAS",
+    "WIPRO", "YESBANK", "ZEEL", "ZOMATO"
+]
+
+def seed_instruments(list_name: str):
+    """
+    Seed instruments database with specified list.
+    
+    Args:
+        list_name: Name of the list to seed ('nifty50', 'nifty100', 'nifty500')
+    """
+    try:
+        # Initialize database
+        init_database()
+        
+        # Get appropriate stock list
+        if list_name.lower() == 'nifty50':
+            stocks = NIFTY_50
+        elif list_name.lower() == 'nifty100':
+            stocks = NIFTY_50 + NIFTY_100_ADDITIONAL
+        elif list_name.lower() == 'nifty500':
+            stocks = NIFTY_50 + NIFTY_100_ADDITIONAL + NIFTY_500_SAMPLE
+        else:
+            logger.error(f"Unknown list: {list_name}")
+            return False
+        
+        # Insert stocks into database
+        db = get_db_session()
+        try:
+            # Clear existing instruments
+            db.execute(text("DELETE FROM instruments"))
+            db.commit()
+            
+            # Insert new instruments
+            for symbol in stocks:
+                query = text("""
+                    INSERT INTO instruments (symbol, exchange, enabled)
+                    VALUES (:symbol, :exchange, :enabled)
+                """)
+                db.execute(query, {
+                    "symbol": symbol,
+                    "exchange": "NSE",
+                    "enabled": 1
+                })
+            
+            db.commit()
+            logger.info(f"Seeded {len(stocks)} instruments from {list_name}")
+            return True
+            
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Error seeding instruments: {e}")
+        return False
+
+def main():
+    """Main entry point."""
+    parser = argparse.ArgumentParser(description="Seed instruments database")
+    parser.add_argument(
+        "--list", 
+        choices=["nifty50", "nifty100", "nifty500"],
+        default="nifty50",
+        help="List of stocks to seed"
+    )
+    
+    args = parser.parse_args()
+    
+    logger.info(f"Seeding instruments with {args.list}")
+    
+    if seed_instruments(args.list):
+        logger.info("Seeding completed successfully")
+        sys.exit(0)
+    else:
+        logger.error("Seeding failed")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
