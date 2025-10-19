@@ -2,594 +2,438 @@
 
 ## Overview
 
-This document tracks all critical architectural, design, and implementation decisions made during the development of the Institutional AI Trade Engine. Each decision is logged with context, rationale, alternatives considered, and current status.
+This document tracks all critical architectural, design, and implementation decisions for the Institutional AI Trade Engine. The engine has been rebuilt as a FYERS-first implementation with full broker abstraction.
 
 ---
 
-## Decision Template
+## Recent Major Decisions (v2.0 - FYERS-First Rebuild)
 
-```
-### Decision #XXX – [Title]
-- **Date**: YYYY-MM-DD
-- **Author**: [Name]
-- **Status**: [Active | Deprecated | Under Review]
-- **Summary**: Brief description
-- **Context**: What problem/situation led to this decision
-- **Decision**: What was decided
-- **Rationale**: Why this decision was made
-- **Alternatives Considered**: Other options and why they were rejected
-- **Affected Modules**: Which parts of the system are impacted
-- **Consequences**: Benefits and drawbacks
-- **Reversal Conditions**: Under what conditions should this be reconsidered
-- **References**: Links to related discussions, docs, issues
-```
+### Decision #009 – FYERS as Primary Broker
 
----
-
-## Active Decisions
-
-### Decision #001 – SQLite as Primary Database
-
-- **Date**: 2025-01-15
+- **Date**: 2025-10-19
 - **Author**: System Architect
 - **Status**: ✅ Active
-- **Summary**: Use SQLite as the default database with PostgreSQL migration path
+- **Summary**: Migrate from Angel One to FYERS as primary broker with full abstraction layer
 
 **Context**:
-- Need simple deployment for single-instance trading engine
-- Want easy setup without external database dependencies
-- Must support future scaling to PostgreSQL
+- Original implementation was Angel One-specific
+- Need for broker-agnostic architecture
+- FYERS provides unified paper/live trading API
+- Requirement for offline testing capability
 
 **Decision**:
-- Use SQLite for development and single-server deployment
-- Design schema to be PostgreSQL-compatible
-- Use SQLAlchemy ORM for database abstraction
+- Implement broker abstraction layer (`BrokerBase`)
+- FYERS as primary broker (paper + live modes via single API)
+- Angel One supported as future option
+- Mock Exchange for offline testing
+- Broker selection via environment variable
 
 **Rationale**:
-1. **Simplicity**: Zero configuration, single file database
-2. **Portability**: Easy to backup, copy, and restore
-3. **Sufficient Performance**: Handles 500 instruments, 50+ trades easily
-4. **Migration Ready**: SQLAlchemy makes PostgreSQL migration seamless
+1. **Unified API**: FYERS sandbox and live use identical endpoints
+2. **Paper Trading**: Native paper trading support without separate infrastructure
+3. **Historical Data**: FYERS provides 5+ years of OHLCV data
+4. **Future-Proof**: Abstraction allows easy broker switching
+5. **Testing**: Mock exchange enables offline development
 
 **Alternatives Considered**:
-1. **PostgreSQL Only**: Rejected - overkill for single instance, complex setup
-2. **MongoDB**: Rejected - unnecessary for structured trading data
-3. **CSV Files**: Rejected - no ACID guarantees, race conditions
+1. **Keep Angel One Only**: Rejected - want FYERS paper trading
+2. **Dual Implementation**: Rejected - maintainability issues
+3. **Abstraction Layer**: ✅ Chosen - flexibility and maintainability
 
 **Affected Modules**:
-- `src/storage/db.py` - Database connection and operations
-- `src/storage/schema.sql` - Schema definition
-- All modules that query database
+- `src/data/broker_base.py` - Abstraction interface
+- `src/data/fyers_client.py` - FYERS implementation
+- `src/data/angel_client.py` - Angel One (legacy support)
+- `src/data/mock_exchange.py` - Offline testing
+- `src/core/config.py` - Broker selection logic
 
 **Consequences**:
 - ✅ Benefits:
-  - Fast setup and deployment
-  - No external dependencies
-  - Easy backups (single file)
-  - Sufficient for 95% of use cases
+  - Single codebase supports 3 brokers
+  - Easy paper-to-live transition (env var change)
+  - Offline testing capability
+  - Future broker additions simple
   
-- ⚠️ Drawbacks:
-  - Limited concurrency (not an issue for single process)
-  - Size limit ~140 TB (not a concern for this use case)
-  - No built-in replication
+- ⚠️ Considerations:
+  - Initial migration effort
+  - Need to maintain broker interfaces
+  - Testing across multiple brokers
 
 **Reversal Conditions**:
-- If running multiple scanner instances concurrently
-- If database size exceeds 10 GB
-- If need distributed deployment
-- If require advanced PostgreSQL features (JSON queries, etc.)
+- If FYERS API proves unreliable
+- If broker abstraction adds significant overhead
+- If single-broker approach is sufficient
 
-**References**:
-- SQLAlchemy documentation
-- SQLite vs PostgreSQL comparison
+---
+
+### Decision #010 – Portfolio-Only Mode
+
+- **Date**: 2025-10-19
+- **Author**: Strategy Lead
+- **Status**: ✅ Active
+- **Summary**: Trade only holdings in portfolio, propose new adds per strategy
+
+**Context**:
+- Original design scanned entire Nifty universe
+- Users want to focus on existing holdings
+- Need mechanism to propose new positions
+- Capital management for actual portfolio
+
+**Decision**:
+- Implement `PortfolioMode` class
+- Load holdings from `data/portfolio.json`
+- Scan ONLY portfolio stocks for 3WI patterns
+- Propose new adds to `data/ideas.csv` when strategy confirms
+- Track actual holdings and P&L
+
+**Rationale**:
+1. **Focus**: Manage what you own, not theoretical universe
+2. **Capital Accuracy**: Size positions based on actual capital
+3. **Opportunity Discovery**: Still find new opportunities via ideas.csv
+4. **Risk Management**: Better control of total exposure
+
+**Implementation**:
+```json
+// data/portfolio.json
+{
+  "holdings": {
+    "RELIANCE": {"qty": 10, "avg_price": 2450.50},
+    "TCS": {"qty": 5, "avg_price": 3600.00}
+  }
+}
+```
+
+**Affected Modules**:
+- `src/strategy/portfolio_mode.py` - Portfolio management
+- `src/orchestration/run_daily.py` - Uses portfolio filter
+- `data/portfolio.json` - Holdings configuration
+- `data/ideas.csv` - Proposed adds output
+
+**Consequences**:
+- ✅ Benefits:
+  - Focused scanning (faster)
+  - Realistic capital management
+  - Clear opportunity pipeline
+  - Actual vs theoretical alignment
+  
+- ⚠️ Considerations:
+  - Manual portfolio file maintenance
+  - Might miss opportunities outside portfolio
+  - Requires discipline to review ideas.csv
+
+**Reversal Conditions**:
+- If full universe scanning preferred
+- If portfolio tracking becomes burdensome
+
+---
+
+### Decision #011 – Hourly Execution Layer
+
+- **Date**: 2025-10-19
+- **Author**: Strategy Lead
+- **Status**: ✅ Active
+- **Summary**: Separate hourly execution from daily scanning
+
+**Context**:
+- Original design mixed scanning and execution
+- Need clearer separation of concerns
+- Hourly position management distinct from daily pattern detection
+- Pre-breakout half-size entries on hourly confirmation
+
+**Decision**:
+- Create `HourlyExecutor` class
+- Run hourly during market hours (09:00-15:00)
+- Manage open positions (profit/loss rules)
+- Execute pending signals on hourly confirmation
+- Support pre-breakout entries (half size)
+
+**Workflow**:
+```
+Hourly Cycle:
+1. Fetch open positions
+2. Get current LTP for each
+3. Apply profit/loss rules:
+   - +3%: Move SL to BE
+   - +6%: Book 25%
+   - +10%: Book 50%
+   - -3%: Caution alert
+   - -6%: Force exit
+4. Process pending signals
+5. Execute triggered signals
+```
+
+**Affected Modules**:
+- `src/strategy/execution_hourly.py` - Hourly executor
+- `src/orchestration/run_hourly.py` - Orchestration
+- `main.py` - Entry point with --hourly flag
+
+**Consequences**:
+- ✅ Benefits:
+  - Clean separation: scan vs execute
+  - Hourly position monitoring
+  - Pre-breakout entry support
+  - Systematic profit management
+  
+- ⚠️ Considerations:
+  - Hourly frequency may miss intra-hour moves
+  - Requires scheduler or manual runs
+
+**Reversal Conditions**:
+- If real-time tick-by-tick monitoring needed
+- If hourly frequency insufficient for strategy
+
+---
+
+### Decision #012 – Main.py Entry Point
+
+- **Date**: 2025-10-19
+- **Author**: System Architect
+- **Status**: ✅ Active
+- **Summary**: Single entry point with CLI arguments for all operations
+
+**Context**:
+- Original design used daemon with scheduler
+- Need simpler execution model
+- Want explicit control over when operations run
+- OS schedulers (cron, Task Scheduler) can handle timing
+
+**Decision**:
+- Create `main.py` as single entry point
+- Use argparse for command selection
+- Support: `--daily`, `--hourly`, `--eod`, `--init`
+- Let OS handle scheduling (cron/Task Scheduler)
+
+**Usage**:
+```bash
+# Daily scan
+python main.py --daily
+
+# Hourly execution
+python main.py --hourly
+
+# End of day report
+python main.py --eod
+
+# Initialize database
+python main.py --init
+```
+
+**Rationale**:
+1. **Simplicity**: One command, clear intent
+2. **Debuggability**: Easy to run specific flows
+3. **Flexibility**: OS schedulers more reliable
+4. **Idempotency**: Safe to re-run commands
+
+**Alternatives Considered**:
+1. **Daemon with APScheduler**: Rejected - complexity, debugging harder
+2. **Separate scripts**: Rejected - maintenance burden
+3. **Single entry point**: ✅ Chosen - simplicity and clarity
+
+**Affected Modules**:
+- `main.py` - Entry point
+- `src/orchestration/` - All flows callable independently
+
+**Consequences**:
+- ✅ Benefits:
+  - Simple execution model
+  - Easy testing of individual flows
+  - Clear logging per run
+  - OS-level scheduling control
+  
+- ⚠️ Considerations:
+  - User must set up scheduler
+  - No built-in scheduling
+  - Multiple process management if needed
+
+**Reversal Conditions**:
+- If integrated scheduler strongly preferred
+- If process management becomes issue
+
+---
+
+### Decision #013 – Pydantic + SQLAlchemy Models
+
+- **Date**: 2025-10-19
+- **Author**: Data Architect
+- **Status**: ✅ Active
+- **Summary**: Use Pydantic for validation, SQLAlchemy for ORM
+
+**Context**:
+- Need data validation for API inputs
+- Need ORM for database operations
+- Want type safety and IDE support
+
+**Decision**:
+- Pydantic models for:
+  - Configuration (Settings)
+  - API requests/responses
+  - Data validation
+- SQLAlchemy models for:
+  - Database tables
+  - ORM operations
+  - Relationships
+
+**Key Models**:
+- `Signal` - Trading signals
+- `Order` - Order tracking
+- `Fill` - Execution records
+- `Position` - Open/closed trades
+- `Instrument` - Trading universe
+- `Setup` - 3WI patterns
+- `LedgerEntry` - Learning ledger
+
+**Affected Modules**:
+- `src/storage/models.py` - All models
+- `src/storage/schema.sql` - Database schema
+- `src/core/config.py` - Settings validation
+
+**Consequences**:
+- ✅ Benefits:
+  - Type safety
+  - Automatic validation
+  - IDE autocomplete
+  - Clear data contracts
+  
+- ⚠️ Considerations:
+  - Dual model system (Pydantic + SQLAlchemy)
+  - Conversion between types when needed
+
+---
+
+## Active Decisions (v1.0 - Original)
+
+### Decision #001 – SQLite as Primary Database
+*(Preserved from v1.0)*
+
+- **Date**: 2025-01-15
+- **Status**: ✅ Active
+- **Summary**: Use SQLite with PostgreSQL migration path
+
+**Rationale**:
+- Zero configuration
+- Single file database
+- Sufficient for 500 instruments
+- Easy backups and portability
+
+**Status**: Still active in v2.0
 
 ---
 
 ### Decision #002 – Risk-Based Position Sizing
+*(Preserved from v1.0)*
 
 - **Date**: 2025-01-15
-- **Author**: Risk Manager
 - **Status**: ✅ Active
-- **Summary**: All positions sized based on 1.5% risk, not capital allocation
+- **Summary**: Size positions based on 1.5% risk, not fixed capital
 
-**Context**:
-- Traditional approach: Allocate fixed capital per trade (e.g., ₹50,000)
-- Problem: Different stocks have different stop distances
-- Result: Inconsistent risk across trades
+**Formula**: `qty = (capital × risk%) / (entry - stop)`
 
-**Decision**:
-- Size every position based on 1.5% risk of total capital
-- Formula: `qty = (capital × risk%) / (entry - stop)`
-- Independent of stock price or stop distance
-
-**Rationale**:
-1. **Consistent Risk**: Every trade risks exactly 1.5% of capital
-2. **Predictable Losses**: Maximum loss per trade is known in advance
-3. **Portfolio Protection**: No single trade can devastate portfolio
-4. **Psychological Benefits**: Same risk across all trades reduces emotion
-
-**Alternatives Considered**:
-1. **Fixed Capital Allocation**: Rejected - inconsistent risk
-2. **Equal Position Sizes**: Rejected - same issue as fixed capital
-3. **Volatility-Based Sizing**: Rejected - overly complex, hard to backtest
-
-**Affected Modules**:
-- `src/core/risk.py` - Position sizing calculations
-- `src/exec/scanner.py` - Uses risk sizing for entries
-- `src/exec/tracker.py` - Tracks risk per position
-
-**Consequences**:
-- ✅ Benefits:
-  - Consistent risk across all trades
-  - Predictable maximum loss
-  - Scalable to any capital size
-  - Works for any stock price
-  
-- ⚠️ Drawbacks:
-  - Wide stops → smaller position sizes
-  - Tight stops → larger position sizes
-  - Capital deployment varies
-
-**Reversal Conditions**:
-- If risk-adjusted returns underperform fixed allocation
-- If psychological preference for equal position sizes
-- If regulatory limits on position sizes
-
-**References**:
-- Van Tharp's "Trade Your Way to Financial Freedom"
-- Risk management best practices
+**Status**: Still active in v2.0
 
 ---
 
 ### Decision #003 – Hourly Tracking Frequency
+*(Enhanced in v2.0)*
 
 - **Date**: 2025-01-16
-- **Author**: System Designer
-- **Status**: ✅ Active
-- **Summary**: Track open positions every hour (09:00-15:00 IST), not continuously
+- **Status**: ✅ Active (Enhanced)
+- **Summary**: Track positions hourly, not continuously
 
-**Context**:
-- Need to manage open positions in real-time
-- Options: Every minute, every 5 minutes, hourly, daily
-- Balance between responsiveness and API efficiency
+**Enhancement in v2.0**:
+- Separate hourly execution layer
+- Pre-breakout support
+- Explicit signal processing
 
-**Decision**:
-- Track positions every hour during market hours
-- 7 tracking cycles per day (09:00, 10:00, ..., 15:00)
-
-**Rationale**:
-1. **Sufficient Responsiveness**: Hourly checks catch most profit/loss levels
-2. **API Efficiency**: 7 calls/day vs 390 calls (per minute)
-3. **Reduced Noise**: Hourly timeframe filters market noise
-4. **System Stability**: Lower load, fewer errors
-
-**Alternatives Considered**:
-1. **Every Minute**: Rejected - too frequent, expensive, noisy
-2. **Every 5 Minutes**: Rejected - still too frequent for strategy
-3. **Twice Daily**: Rejected - insufficient responsiveness
-4. **Real-Time Tick**: Rejected - overkill for swing trading strategy
-
-**Affected Modules**:
-- `src/core/scheduler.py` - Job scheduling
-- `src/exec/tracker.py` - Position tracking logic
-
-**Consequences**:
-- ✅ Benefits:
-  - Low API call volume
-  - Stable system performance
-  - Adequate for 3WI strategy (swing trades)
-  - Reduces false signals from noise
-  
-- ⚠️ Drawbacks:
-  - Delayed reaction to price moves (up to 1 hour)
-  - Might miss intra-hour stop losses
-  - Trailing stops update hourly, not continuously
-
-**Reversal Conditions**:
-- If strategy changes to intraday (scalping/day trading)
-- If need tighter risk control (immediate stop loss execution)
-- If API costs become negligible
-
-**References**:
-- Angel One API rate limits
-- Trading psychology research on overtrading
+**Status**: Enhanced and active in v2.0
 
 ---
 
 ### Decision #004 – Long-Only Strategy
+*(Preserved from v1.0)*
 
 - **Date**: 2025-01-16
-- **Author**: Strategy Designer
 - **Status**: ✅ Active
-- **Summary**: Trade only long positions (upward breakouts), not short
+- **Summary**: Trade only long positions, not shorts
 
-**Context**:
-- 3WI pattern can break out upward or downward
-- Need to decide: long only, short only, or both
-
-**Decision**:
-- Trade only upward breakouts (long positions)
-- Ignore downward breakouts
-
-**Rationale**:
-1. **Market Bias**: Indian markets have upward bias long-term
-2. **Simplicity**: Easier to manage one direction
-3. **Risk Profile**: Longs have unlimited upside, limited downside
-4. **Margin Requirements**: Shorts require higher margin
-
-**Alternatives Considered**:
-1. **Both Long and Short**: Rejected - complex, requires different filters
-2. **Short Only**: Rejected - against market bias, harder psychologically
-3. **Market Regime Based**: Rejected - adds complexity, hard to backtest
-
-**Affected Modules**:
-- `src/strategy/three_week_inside.py` - Breakout detection
-- `src/strategy/filters.py` - Filters favor uptrend
-- `src/exec/scanner.py` - Only creates long positions
-
-**Consequences**:
-- ✅ Benefits:
-  - Simpler system logic
-  - Aligned with market bias
-  - No short-selling complexities
-  - Lower margin requirements
-  
-- ⚠️ Drawbacks:
-  - Misses downward breakout opportunities
-  - No hedge during market downturns
-  - Fully exposed to market risk
-
-**Reversal Conditions**:
-- If market enters sustained bear phase
-- If short-selling profitability proven in backtesting
-- If need market-neutral strategy
-
-**References**:
-- Historical Nifty 50 returns (long-term uptrend)
-- Backtesting results of long vs short
+**Status**: Still active in v2.0
 
 ---
 
 ### Decision #005 – Telegram as Primary Alert Channel
+*(Preserved from v1.0)*
 
 - **Date**: 2025-01-16
-- **Author**: Integration Lead
 - **Status**: ✅ Active
-- **Summary**: Use Telegram for real-time alerts, Google Sheets for historical tracking
+- **Summary**: Use Telegram for real-time alerts
 
-**Context**:
-- Need real-time notifications for trades, stops, targets
-- Options: Email, SMS, Telegram, WhatsApp, Slack
-- Need reliable, instant, free solution
-
-**Decision**:
-- Telegram Bot API for all real-time alerts
-- Google Sheets for portfolio tracking and history
-- Email as fallback (future enhancement)
-
-**Rationale**:
-1. **Instant Delivery**: Telegram messages arrive instantly
-2. **Free**: No per-message costs
-3. **Reliable**: 99.9%+ uptime
-4. **Rich Formatting**: Markdown support for structured alerts
-5. **Easy Setup**: Simple bot creation process
-
-**Alternatives Considered**:
-1. **Email**: Rejected - slower, spam filters, less reliable
-2. **SMS**: Rejected - cost per message, character limits
-3. **WhatsApp**: Rejected - unofficial API, reliability concerns
-4. **Slack**: Rejected - overkill, requires workspace setup
-
-**Affected Modules**:
-- `src/alerts/telegram.py` - Telegram integration
-- All modules that send notifications
-
-**Consequences**:
-- ✅ Benefits:
-  - Instant notifications on mobile
-  - Zero cost
-  - Reliable delivery
-  - Rich formatting support
-  
-- ⚠️ Drawbacks:
-  - Requires Telegram account
-  - API token management
-  - No built-in alert history (handled by Google Sheets)
-
-**Reversal Conditions**:
-- If Telegram API becomes unreliable
-- If cost-effective SMS service available
-- If regulatory requirements demand email-only
-
-**References**:
-- Telegram Bot API documentation
-- Comparison of notification services
+**Status**: Still active in v2.0 (optional)
 
 ---
 
 ### Decision #006 – 6% Maximum Open Risk Limit
+*(Preserved from v1.0)*
 
 - **Date**: 2025-01-17
-- **Author**: Risk Manager
 - **Status**: ✅ Active
-- **Summary**: Limit total open risk to 6% of capital (approximately 4 positions)
+- **Summary**: Limit total open risk to 6% (≈4 positions @ 1.5% each)
 
-**Context**:
-- Each position risks 1.5% of capital
-- Need to prevent overexposure to market
-- Balance between diversification and concentration
-
-**Decision**:
-- Maximum total open risk: 6% of capital
-- Translates to ~4 concurrent positions at 1.5% each
-- Hard limit enforced by scanner before entry
-
-**Rationale**:
-1. **Controlled Maximum Loss**: Even if all positions stopped out simultaneously, lose only 6%
-2. **Reasonable Diversification**: 4 positions provide some diversification
-3. **Manageable Tracking**: 4 positions easy to monitor
-4. **Recovery Potential**: 6% loss recoverable with 2-3 good trades
-
-**Alternatives Considered**:
-1. **10% Limit (6-7 positions)**: Rejected - too many positions, hard to track
-2. **3% Limit (2 positions)**: Rejected - too conservative, limited opportunities
-3. **No Limit**: Rejected - dangerous, unlimited downside
-
-**Affected Modules**:
-- `src/core/config.py` - MAX_OPEN_RISK_PCT configuration
-- `src/core/risk.py` - check_risk_limits() function
-- `src/exec/scanner.py` - Enforces limit before entry
-
-**Consequences**:
-- ✅ Benefits:
-  - Maximum drawdown limited to 6% (if all stopped)
-  - Forces trade selectivity (only best setups)
-  - Manageable number of positions
-  - Psychological comfort
-  
-- ⚠️ Drawbacks:
-  - Might miss opportunities when at limit
-  - Capital not fully deployed (53% idle typical)
-  - Lower absolute returns vs fully deployed capital
-
-**Reversal Conditions**:
-- If strategy proves highly reliable (>80% win rate)
-- If need higher returns justify higher risk
-- If portfolio size grows significantly
-
-**References**:
-- Professional trader risk management practices
-- Kelly Criterion calculations
+**Status**: Still active in v2.0
 
 ---
 
 ### Decision #007 – APScheduler for Job Scheduling
+*(Replaced in v2.0)*
 
 - **Date**: 2025-01-17
-- **Author**: System Architect
-- **Status**: ✅ Active
-- **Summary**: Use APScheduler (cron-based) for all time-based job execution
+- **Status**: ❌ Deprecated (Replaced by Decision #012)
+- **Summary**: Originally used APScheduler, now use OS schedulers
 
-**Context**:
-- Need reliable scheduling for: scanner (2x), tracker (7x), EOD, near-breakout
-- Options: cron jobs, APScheduler, Celery Beat, custom scheduler
-- Need precise timing aligned with IST market hours
-
-**Decision**:
-- Use APScheduler with BlockingScheduler
-- Cron expressions for all jobs
-- Timezone: Asia/Kolkata (IST)
-
-**Rationale**:
-1. **Python-Native**: No external dependencies beyond library
-2. **Cron Syntax**: Familiar, powerful, well-tested
-3. **Timezone Support**: Explicit IST handling
-4. **Graceful Shutdown**: Handles SIGTERM/SIGINT properly
-5. **Missed Job Handling**: Configurable behavior
-
-**Alternatives Considered**:
-1. **System Cron**: Rejected - requires shell scripts, less portable
-2. **Celery Beat**: Rejected - overkill, requires message broker
-3. **Custom Scheduler**: Rejected - reinventing wheel, error-prone
-
-**Affected Modules**:
-- `src/core/scheduler.py` - All job definitions
-- `src/daemon.py` - Scheduler initialization
-
-**Consequences**:
-- ✅ Benefits:
-  - Reliable job execution
-  - Precise timing control
-  - Easy to add/modify jobs
-  - Python-based configuration
-  
-- ⚠️ Drawbacks:
-  - Must keep process running
-  - No distributed scheduling (single instance)
-  - Jobs must be fast (blocking scheduler)
-
-**Reversal Conditions**:
-- If need distributed job execution
-- If jobs take >30 minutes (need async)
-- If require job persistence across restarts
-
-**References**:
-- APScheduler documentation
-- Comparison of Python schedulers
+**Replacement**: main.py with CLI + OS scheduler (cron/Task Scheduler)
 
 ---
 
 ### Decision #008 – Partial Profit Booking Strategy
+*(Preserved from v1.0)*
 
 - **Date**: 2025-01-17
-- **Author**: Strategy Designer
 - **Status**: ✅ Active
-- **Summary**: Book profits in stages: 25% at +6%, 50% at T1, 50% at T2
+- **Summary**: Book 25% @ +6%, 50% @ T1, remainder @ T2
 
-**Context**:
-- Need to balance: letting winners run vs locking in profits
-- Options: all-or-nothing exits, scaling out, trailing only
-- Psychological challenge of watching profits evaporate
-
-**Decision**:
-- +6%: Book 25% of position, trail remaining
-- T1 (+1.5R): Book 50% of remaining, lock stop at T1
-- T2 (+3R): Exit remaining 50%
-
-**Rationale**:
-1. **Reduces Stress**: Partial profits provide psychological comfort
-2. **Captures Outliers**: Remaining position benefits from big moves
-3. **Proven Strategy**: Widely used by professional traders
-4. **Balanced Approach**: Mix of profit-taking and trend-following
-
-**Alternatives Considered**:
-1. **All or Nothing**: Rejected - misses partial wins, high stress
-2. **Trail Only**: Rejected - might give back all profits
-3. **Equal Thirds**: Rejected - less optimal risk:reward
-
-**Affected Modules**:
-- `src/exec/tracker.py` - Partial exit logic
-- `src/storage/ledger.py` - Records partial exits
-- `src/alerts/telegram.py` - Partial exit alerts
-
-**Consequences**:
-- ✅ Benefits:
-  - Reduced anxiety watching positions
-  - Guaranteed profit on strong moves
-  - Captures tail events (rare big winners)
-  - Smooth equity curve
-  
-- ⚠️ Drawbacks:
-  - Lower profit on strong trends (vs holding full)
-  - More transactions to track
-  - Complex exit logic
-
-**Reversal Conditions**:
-- If backtesting shows all-or-nothing outperforms
-- If system can handle psychological stress of full holds
-- If simplicity preferred over optimization
-
-**References**:
-- Van Tharp's exit strategies
-- Professional trader profit-taking strategies
+**Status**: Still active in v2.0, implemented in HourlyExecutor
 
 ---
 
-## Deprecated Decisions
+## Summary Statistics (v2.0)
 
-### Decision #D01 – Minute-Level Tracking
-
-- **Date**: 2025-01-15 (Created)
-- **Deprecated**: 2025-01-16
-- **Author**: Initial Designer
-- **Status**: ❌ Deprecated (Replaced by Decision #003)
-- **Summary**: Originally planned to track positions every minute
-
-**Why Deprecated**:
-- Too frequent for swing trading strategy
-- High API costs and system load
-- Created alert fatigue
-- Replaced with hourly tracking (Decision #003)
-
-**Lessons Learned**:
-- Match tracking frequency to trading timeframe
-- Consider API costs early in design
-- Overly frequent updates provide limited value
-
----
-
-## Under Review
-
-### Decision #R01 – Index Options Integration
-
-- **Date**: 2025-01-20
-- **Author**: Strategy Expansion Team
-- **Status**: 🔍 Under Review
-- **Summary**: Considering adding BankNifty/Nifty options trading alongside equity
-
-**Context**:
-- Index watch module already tracks BankNifty/Nifty LTP
-- Options provide leverage and defined risk
-- Could complement equity strategy
-
-**Proposal**:
-- Add options trading for BankNifty weekly expiries
-- Use existing 3WI breakout signals for entry timing
-- Risk-defined strategies (credit spreads, iron condors)
-
-**Arguments For**:
-- Higher returns with less capital
-- Defined risk (options can't gap against you)
-- Weekly opportunities (52 expiries/year)
-- Complement equity positions
-
-**Arguments Against**:
-- Increased complexity
-- Time decay management required
-- Different risk profile than equity
-- Regulatory considerations (segment approval)
-
-**Next Steps**:
-1. Complete backtesting of options strategies
-2. Assess regulatory requirements
-3. Design integration with existing system
-4. Decision by: 2025-02-15
-
-**References**:
-- Options trading research
-- Index options historical data
-
----
-
-## Decision-Making Process
-
-### How We Make Decisions
-
-1. **Identify Problem/Opportunity**: What needs deciding?
-2. **Research Options**: What are the alternatives?
-3. **Document Tradeoffs**: Pros/cons of each option
-4. **Make Decision**: Choose based on project goals
-5. **Document Decision**: Record in this file
-6. **Implement**: Build based on decision
-7. **Review Periodically**: Revisit under "Reversal Conditions"
-
-### When to Revisit a Decision
-
-- **Quarterly Review**: Every 3 months, review all active decisions
-- **Performance Issues**: If decision causes problems
-- **New Information**: If new alternatives become available
-- **Reversal Conditions Met**: As documented in each decision
-
----
-
-## Summary Statistics
-
-**Total Decisions**: 8 active, 1 deprecated, 1 under review
+**Total Decisions**: 13 (8 preserved, 5 new, 1 deprecated)
 
 **By Category**:
-- Architecture: 2 (SQLite, APScheduler)
-- Risk Management: 3 (Position sizing, 6% limit, Partial exits)
-- Strategy: 2 (Long-only, Tracking frequency)
+- Architecture: 3 (SQLite, Broker Abstraction, Entry Point)
+- Risk Management: 3 (Position sizing, 6% limit, Partials)
+- Strategy: 3 (Long-only, Hourly exec, Portfolio-only)
 - Integration: 1 (Telegram)
-- Under Review: 1 (Options)
+- Data Models: 1 (Pydantic + SQLAlchemy)
+- Execution: 2 (Hourly layer, Main entry)
 
-**Decision Velocity**:
-- January 2025: 10 decisions made
-- Review cycle: Quarterly
+**Version History**:
+- v1.0 (Jan 2025): Angel One-specific, daemon-based
+- v2.0 (Oct 2025): FYERS-first, broker abstraction, portfolio-only
 
 ---
 
 ## References
 
 ### Internal
-- `memory-bank/architecture.md` - System architecture details
+- `memory-bank/architecture.md` - Updated architecture
 - `memory-bank/patterns/` - Implementation patterns
+- `src/data/broker_base.py` - Broker abstraction
+- `src/strategy/portfolio_mode.py` - Portfolio management
 
 ### External
+- FYERS API: https://developers.fyers.in
 - "Trade Your Way to Financial Freedom" - Van Tharp
-- "Professional Trading System Design" - Various authors
 - SQLAlchemy documentation
-- APScheduler documentation
+- Pydantic documentation
 
 ---
 
@@ -598,8 +442,9 @@ This document tracks all critical architectural, design, and implementation deci
 | Date | Change | By |
 |------|--------|-----|
 | 2025-01-20 | Initial decision log created | System Architect |
-| 2025-01-20 | Added 8 active decisions | Multiple authors |
-| 2025-01-20 | Added 1 under-review decision | Strategy Team |
+| 2025-10-19 | v2.0 rebuild - FYERS-first architecture | System Architect |
+| 2025-10-19 | Added 5 new decisions (#009-#013) | Multiple authors |
+| 2025-10-19 | Deprecated APScheduler decision | System Architect |
 
 ---
 

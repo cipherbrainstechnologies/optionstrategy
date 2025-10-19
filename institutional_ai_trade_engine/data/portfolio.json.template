@@ -1,0 +1,34 @@
+{
+  "updated_at": "2025-01-20T00:00:00",
+  "notes": "Edit this file to track your current holdings. The engine will scan only these stocks.",
+  "holdings": {
+    "RELIANCE": {
+      "qty": 10,
+      "avg_price": 2450.50,
+      "notes": "Example holding - Energy sector"
+    },
+    "TCS": {
+      "qty": 5,
+      "avg_price": 3600.00,
+      "notes": "Example holding - IT sector"
+    },
+    "HDFCBANK": {
+      "qty": 15,
+      "avg_price": 1650.00,
+      "notes": "Example holding - Banking sector"
+    },
+    "INFY": {
+      "qty": 20,
+      "avg_price": 1450.00,
+      "notes": "Example holding - IT sector"
+    }
+  },
+  "instructions": [
+    "1. Replace example holdings with your actual portfolio",
+    "2. Use exact symbol names (e.g., RELIANCE, TCS, INFY)",
+    "3. Set qty to number of shares you own",
+    "4. Set avg_price to your average purchase price",
+    "5. Save as portfolio.json (remove .template extension)",
+    "6. The engine will scan ONLY these stocks for 3WI patterns"
+  ]
+}

@@ -1,16 +1,26 @@
 [project]
 name = "institutional-ai-trade-engine"
-version = "1.0.0"
-requires-python = ">=3.10"
+version = "2.0.0"
+description = "Institutional AI Trade Engine - FYERS-First with Broker Abstraction"
+requires-python = ">=3.11"
 dependencies = [
-  "pandas>=2.2",
-  "numpy>=1.26",
+  "pydantic==2.8.2",
+  "pandas==2.2.2",
+  "numpy==1.26.4",
+  "sqlalchemy==2.0.32",
+  "alembic==1.13.2",
+  "python-dotenv==1.0.1",
+  "tenacity==8.3.0",
+  "websocket-client==1.8.0",
+  "requests==2.32.3",
+  "fastapi==0.114.2",
+  "uvicorn==0.30.6",
+  "fyers-apiv3==3.0.8",
+  "ta==0.11.0",
+  "pendulum==3.0.0",
+  "rich==13.7.1",
   "python-telegram-bot>=21.4",
-  "requests",
-  "SQLAlchemy>=2.0",
   "apscheduler>=3.10",
-  "ta>=0.11.0",
-  "python-dotenv",
   "pytz",
   "gspread",
   "oauth2client"

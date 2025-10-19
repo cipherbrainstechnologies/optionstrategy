@@ -1,0 +1,355 @@
+"""
+FYERS API client implementation.
+Supports both paper trading (sandbox) and live trading.
+"""
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import List, Dict, Any, Optional, Callable
+import logging
+
+try:
+    from fyers_apiv3 import fyersModel
+    FYERS_AVAILABLE = True
+except ImportError:
+    FYERS_AVAILABLE = False
+    logging.warning("fyers-apiv3 not installed. Install with: pip install fyers-apiv3==3.0.8")
+
+from .broker_base import BrokerBase
+
+logger = logging.getLogger(__name__)
+
+
+class FyersAPI(BrokerBase):
+    """FYERS API implementation with paper/live support."""
+    
+    def __init__(self, settings):
+        """
+        Initialize FYERS client.
+        
+        Args:
+            settings: Settings object with FYERS credentials
+        """
+        if not FYERS_AVAILABLE:
+            raise ImportError("fyers-apiv3 not installed. Run: pip install fyers-apiv3==3.0.8")
+        
+        self.settings = settings
+        self._sandbox = bool(str(settings.FYERS_SANDBOX).lower() == "true")
+        
+        # Validate required credentials
+        missing = []
+        for key in ["FYERS_CLIENT_ID", "FYERS_ACCESS_TOKEN"]:
+            if not getattr(settings, key, None):
+                missing.append(key)
+        
+        if missing:
+            raise ValueError(
+                f"Missing FYERS credentials: {missing}\n"
+                "1) Visit https://developers.fyers.in to create app\n"
+                "2) Generate access token (OAuth flow)\n"
+                "3) Add to .env and re-run"
+            )
+        
+        # Initialize FYERS client
+        self.client = fyersModel.FyersModel(
+            client_id=settings.FYERS_CLIENT_ID,
+            token=settings.FYERS_ACCESS_TOKEN,
+            is_async=False,
+            log_path=settings.LOG_PATH
+        )
+        
+        logger.info(f"Initialized FYERS client: {self.name()}")
+    
+    def name(self) -> str:
+        """Return broker name with mode."""
+        return f"FYERS_{'SANDBOX' if self._sandbox else 'LIVE'}"
+    
+    def _symbol(self, symbol: str) -> str:
+        """
+        Normalize symbol to FYERS format.
+        
+        Args:
+            symbol: Symbol in any format
+            
+        Returns:
+            FYERS format: "NSE:SYMBOL-EQ"
+        """
+        if ":" in symbol:
+            return symbol
+        return f"NSE:{symbol}-EQ"
+    
+    def history(self, symbol: str, resolution: str, start: datetime, end: datetime) -> pd.DataFrame:
+        """
+        Fetch historical OHLCV data from FYERS.
+        
+        Args:
+            symbol: Trading symbol
+            resolution: "60" for 1h, "D" for daily, "W" for weekly
+            start: Start datetime
+            end: End datetime
+            
+        Returns:
+            DataFrame with [ts, open, high, low, close, volume]
+        """
+        try:
+            payload = {
+                "symbol": self._symbol(symbol),
+                "resolution": resolution,
+                "date_format": "1",  # Unix timestamp
+                "range_from": start.strftime("%Y-%m-%d"),
+                "range_to": end.strftime("%Y-%m-%d"),
+                "cont_flag": "1"  # Continuous data
+            }
+            
+            response = self.client.history(data=payload)
+            
+            if response.get("s") != "ok":
+                logger.error(f"FYERS history error: {response}")
+                return pd.DataFrame()
+            
+            candles = response.get("candles", [])
+            if not candles:
+                logger.warning(f"No data for {symbol} from {start} to {end}")
+                return pd.DataFrame()
+            
+            # Create DataFrame
+            cols = ["ts", "open", "high", "low", "close", "volume"]
+            df = pd.DataFrame(candles, columns=cols)
+            
+            # Convert timestamp to IST
+            df["ts"] = pd.to_datetime(df["ts"], unit="s")
+            df["ts"] = df["ts"].dt.tz_localize("UTC").dt.tz_convert("Asia/Kolkata")
+            
+            # Set index
+            df = df.set_index("ts")
+            
+            logger.info(f"Fetched {len(df)} candles for {symbol} ({resolution})")
+            return df
+            
+        except Exception as e:
+            logger.error(f"Error fetching history for {symbol}: {e}")
+            return pd.DataFrame()
+    
+    def candles(self, symbol: str, tf: str, lookback: int) -> pd.DataFrame:
+        """
+        Convenience method to fetch recent candles.
+        
+        Args:
+            symbol: Trading symbol
+            tf: "1h", "day", "week"
+            lookback: Number of periods
+            
+        Returns:
+            DataFrame with recent candles
+        """
+        # Map timeframes
+        tf_map = {
+            "1h": ("60", timedelta(days=lookback * 2)),  # ~2 days per candle
+            "day": ("D", timedelta(days=lookback)),
+            "week": ("W", timedelta(weeks=lookback))
+        }
+        
+        if tf not in tf_map:
+            logger.error(f"Invalid timeframe: {tf}. Use '1h', 'day', or 'week'")
+            return pd.DataFrame()
+        
+        resolution, delta = tf_map[tf]
+        end = datetime.now()
+        start = end - delta
+        
+        return self.history(symbol, resolution, start, end).tail(lookback)
+    
+    def subscribe_ticks(self, symbols: List[str], on_tick: Callable) -> None:
+        """
+        Subscribe to real-time ticks via WebSocket.
+        Note: FYERS WebSocket implementation would go here.
+        For hourly execution, this is not critical.
+        """
+        logger.warning("WebSocket subscription not implemented. Use get_ltp() for current prices.")
+        pass
+    
+    def place_order(
+        self, 
+        symbol: str, 
+        side: str, 
+        qty: int, 
+        order_type: str, 
+        price: Optional[float] = None, 
+        tag: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Place order on FYERS (paper or live).
+        
+        Args:
+            symbol: Trading symbol
+            side: "BUY" or "SELL"
+            qty: Quantity (integer)
+            order_type: "MARKET" or "LIMIT"
+            price: Limit price
+            tag: Custom tag (max 15 chars)
+            
+        Returns:
+            Dict with order_id, status, message
+        """
+        try:
+            data = {
+                "symbol": self._symbol(symbol),
+                "qty": int(qty),
+                "type": 2 if order_type.upper() == "MARKET" else 1,
+                "side": 1 if side.upper() == "BUY" else -1,
+                "productType": "CNC",  # Cash & Carry (delivery)
+                "limitPrice": float(price) if price else 0,
+                "stopPrice": 0,
+                "validity": "DAY",
+                "disclosedQty": 0,
+                "offlineOrder": False,
+                "stopLoss": 0,
+                "takeProfit": 0,
+                "tag": tag[:15] if tag else ""
+            }
+            
+            response = self.client.place_order(data=data)
+            
+            if response.get("s") == "ok":
+                order_id = response.get("id", "")
+                logger.info(f"Order placed: {symbol} {side} {qty} @ {price or 'MARKET'} (ID: {order_id})")
+                return {
+                    "order_id": order_id,
+                    "status": "success",
+                    "message": response.get("message", "Order placed")
+                }
+            else:
+                error_msg = response.get("message", "Unknown error")
+                logger.error(f"Order failed: {error_msg}")
+                return {
+                    "order_id": None,
+                    "status": "error",
+                    "message": error_msg
+                }
+                
+        except Exception as e:
+            logger.error(f"Error placing order: {e}")
+            return {
+                "order_id": None,
+                "status": "error",
+                "message": str(e)
+            }
+    
+    def modify_order(self, order_id: str, **kwargs) -> Dict[str, Any]:
+        """Modify an existing order."""
+        try:
+            data = {"id": order_id}
+            data.update(kwargs)
+            
+            response = self.client.modify_order(data=data)
+            
+            return {
+                "status": "success" if response.get("s") == "ok" else "error",
+                "message": response.get("message", "")
+            }
+        except Exception as e:
+            logger.error(f"Error modifying order {order_id}: {e}")
+            return {"status": "error", "message": str(e)}
+    
+    def cancel_order(self, order_id: str) -> Dict[str, Any]:
+        """Cancel an order."""
+        try:
+            response = self.client.cancel_order(data={"id": order_id})
+            
+            return {
+                "status": "success" if response.get("s") == "ok" else "error",
+                "message": response.get("message", "")
+            }
+        except Exception as e:
+            logger.error(f"Error canceling order {order_id}: {e}")
+            return {"status": "error", "message": str(e)}
+    
+    def positions(self) -> List[Dict[str, Any]]:
+        """Get current positions."""
+        try:
+            response = self.client.positions()
+            
+            if response.get("s") != "ok":
+                logger.error(f"Error fetching positions: {response.get('message')}")
+                return []
+            
+            positions = response.get("netPositions", [])
+            
+            # Normalize format
+            result = []
+            for pos in positions:
+                result.append({
+                    "symbol": pos.get("symbol", ""),
+                    "qty": pos.get("netQty", 0),
+                    "avg_price": pos.get("avgPrice", 0),
+                    "ltp": pos.get("ltp", 0),
+                    "pnl": pos.get("pl", 0)
+                })
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error fetching positions: {e}")
+            return []
+    
+    def orders(self) -> List[Dict[str, Any]]:
+        """Get order book."""
+        try:
+            response = self.client.orderbook()
+            
+            if response.get("s") != "ok":
+                logger.error(f"Error fetching orders: {response.get('message')}")
+                return []
+            
+            orders = response.get("orderBook", [])
+            
+            # Normalize format
+            result = []
+            for order in orders:
+                result.append({
+                    "order_id": order.get("id", ""),
+                    "symbol": order.get("symbol", ""),
+                    "side": "BUY" if order.get("side") == 1 else "SELL",
+                    "qty": order.get("qty", 0),
+                    "filled_qty": order.get("filledQty", 0),
+                    "price": order.get("limitPrice", 0),
+                    "status": order.get("status", ""),
+                    "order_type": "MARKET" if order.get("type") == 2 else "LIMIT"
+                })
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error fetching orders: {e}")
+            return []
+    
+    def get_ltp(self, symbol: str) -> Optional[float]:
+        """
+        Get Last Traded Price.
+        
+        Args:
+            symbol: Trading symbol
+            
+        Returns:
+            LTP or None
+        """
+        try:
+            payload = {
+                "symbols": self._symbol(symbol)
+            }
+            
+            response = self.client.quotes(data=payload)
+            
+            if response.get("s") != "ok":
+                logger.error(f"Error fetching LTP: {response.get('message')}")
+                return None
+            
+            data = response.get("d", [])
+            if data:
+                ltp = data[0].get("v", {}).get("lp", None)
+                return float(ltp) if ltp else None
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error fetching LTP for {symbol}: {e}")
+            return None
