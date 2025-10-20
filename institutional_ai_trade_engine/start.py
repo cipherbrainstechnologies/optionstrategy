@@ -6,7 +6,11 @@ import sys
 import os
 
 # Add current directory to Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, current_dir)
+
+# Change to the institutional_ai_trade_engine directory
+os.chdir(current_dir)
 
 import uvicorn
 
