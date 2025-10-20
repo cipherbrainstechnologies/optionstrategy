@@ -1,1 +1,12 @@
- 
+# Essential packages for deployment
+fastapi==0.114.2
+uvicorn==0.30.6
+pydantic==2.8.2
+pandas==2.2.2
+numpy==1.26.4
+sqlalchemy==2.0.32
+python-dotenv==1.0.1
+requests>=2.31.0
+websocket-client>=1.6.1
+fyers-apiv3>=3.1.7
+psycopg2-binary>=2.9.11
