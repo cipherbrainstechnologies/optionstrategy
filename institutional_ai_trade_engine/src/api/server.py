@@ -43,6 +43,11 @@ def startup_event():
     except Exception:
         pass
 
+@app.get("/health")
+def health_check():
+    """Health check endpoint for deployment monitoring."""
+    return {"status": "ok", "message": "Trading Engine API is running"}
+
 @app.get("/overview")
 def get_overview():
     # Avoid ORM import; use SQLAlchemy Core

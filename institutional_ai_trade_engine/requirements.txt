@@ -1,45 +1,12 @@
-# Institutional AI Trade Engine - FYERS-First
-# Python 3.11+ required
-
-# Core data handling
+# Essential packages for deployment
+fastapi==0.114.2
+uvicorn==0.30.6
 pydantic==2.8.2
 pandas==2.2.2
 numpy==1.26.4
-
-# Database
 sqlalchemy==2.0.32
-alembic==1.13.2
-
-# Configuration & utilities
 python-dotenv==1.0.1
-tenacity==8.3.0
-pendulum==3.0.0
-rich==13.7.1
-
-# Networking
-websocket-client>=1.6.1
 requests>=2.31.0
-
-# Web framework (optional, for future API)
-fastapi==0.114.2
-uvicorn==0.30.6
-
-# Broker APIs
+websocket-client>=1.6.1
 fyers-apiv3>=3.1.7
-
-# Database drivers
 psycopg2-binary>=2.9.11
-
-# Technical analysis
-ta==0.11.0
-
-# Alerts & notifications
-python-telegram-bot>=21.4
-
-# Scheduling
-apscheduler>=3.10
-pytz
-
-# Google Sheets integration (optional)
-gspread
-oauth2client
