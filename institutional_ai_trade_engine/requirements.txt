@@ -17,8 +17,8 @@ pendulum==3.0.0
 rich==13.7.1
 
 # Networking
-websocket-client==1.6.1
-requests==2.31.0
+websocket-client>=1.6.1
+requests>=2.31.0
 
 # Web framework (optional, for future API)
 fastapi==0.114.2
