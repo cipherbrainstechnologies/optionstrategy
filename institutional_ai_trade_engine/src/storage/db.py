@@ -10,12 +10,40 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def get_engine():
+    """Get SQLAlchemy engine with cloud-ready configuration."""
+    from ..core.config import Settings
+    settings = Settings()
+    
+    db_url = settings.DATABASE_URL
+    
+    # PostgreSQL configuration for cloud
+    if db_url.startswith("postgresql://"):
+        engine = create_engine(
+            db_url,
+            pool_pre_ping=True,
+            pool_size=5,
+            max_overflow=10
+        )
+    else:
+        # SQLite for local development
+        engine = create_engine(
+            db_url,
+            connect_args={"check_same_thread": False}
+        )
+    
+    return engine
+
 # Database configuration
 DB_PATH = os.getenv("DB_PATH", "trading_engine.db")
-DATABASE_URL = f"sqlite:///{DB_PATH}"
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
+
+# Convert Render's postgres:// to postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # Create engine
-engine = create_engine(DATABASE_URL, echo=False)
+engine = get_engine()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_database():

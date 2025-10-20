@@ -14,6 +14,8 @@ app = FastAPI(title="Institutional AI Trade Engine API")
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://*.vercel.app",
+    os.getenv("FRONTEND_URL", "")
 ]
 
 app.add_middleware(

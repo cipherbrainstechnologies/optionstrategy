@@ -43,6 +43,13 @@ class Settings:
     GSHEETS_CREDENTIALS_JSON: Optional[str] = os.getenv("GSHEETS_CREDENTIALS_JSON")
     GSHEETS_MASTER_SHEET: str = os.getenv("GSHEETS_MASTER_SHEET", "Institutional Portfolio Master Sheet")
     
+    # Database configuration
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./data/trade_engine.sqlite")
+    
+    # Convert Render's postgres:// to postgresql://
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    
     # Paths
     DATA_DIR: str = os.getenv("DATA_DIR", "./data")
     DB_PATH: str = os.getenv("DB_PATH", "./data/trade_engine.sqlite")

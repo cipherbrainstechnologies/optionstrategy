@@ -1,5 +1,5 @@
 """
-FYERS API client implementation.
+FYERS API client implementation using official v3 API.
 Supports both paper trading (sandbox) and live trading.
 """
 import pandas as pd
@@ -12,7 +12,7 @@ try:
     FYERS_AVAILABLE = True
 except ImportError:
     FYERS_AVAILABLE = False
-    logging.warning("fyers-apiv3 not installed. Install with: pip install fyers-apiv3==3.0.8")
+    logging.warning("fyers-apiv3 not installed. Install with: pip install fyers-apiv3")
 
 from .broker_base import BrokerBase
 
@@ -24,13 +24,13 @@ class FyersAPI(BrokerBase):
     
     def __init__(self, settings):
         """
-        Initialize FYERS client.
+        Initialize FYERS client using official v3 API.
         
         Args:
             settings: Settings object with FYERS credentials
         """
         if not FYERS_AVAILABLE:
-            raise ImportError("fyers-apiv3 not installed. Run: pip install fyers-apiv3==3.0.8")
+            raise ImportError("fyers-apiv3 not installed. Run: pip install fyers-apiv3")
         
         self.settings = settings
         self._sandbox = bool(str(settings.FYERS_SANDBOX).lower() == "true")
@@ -44,17 +44,17 @@ class FyersAPI(BrokerBase):
         if missing:
             raise ValueError(
                 f"Missing FYERS credentials: {missing}\n"
-                "1) Visit https://developers.fyers.in to create app\n"
+                "1) Visit https://myapi.fyers.in/dashboard/ to create app\n"
                 "2) Generate access token (OAuth flow)\n"
                 "3) Add to .env and re-run"
             )
         
-        # Initialize FYERS client
+        # Initialize FYERS client using official v3 API
         self.client = fyersModel.FyersModel(
-            client_id=settings.FYERS_CLIENT_ID,
             token=settings.FYERS_ACCESS_TOKEN,
             is_async=False,
-            log_path=settings.LOG_PATH
+            client_id=settings.FYERS_CLIENT_ID,
+            log_path=getattr(settings, 'LOG_PATH', '')
         )
         
         logger.info(f"Initialized FYERS client: {self.name()}")
@@ -79,7 +79,7 @@ class FyersAPI(BrokerBase):
     
     def history(self, symbol: str, resolution: str, start: datetime, end: datetime) -> pd.DataFrame:
         """
-        Fetch historical OHLCV data from FYERS.
+        Fetch historical OHLCV data from FYERS using official v3 API.
         
         Args:
             symbol: Trading symbol
@@ -91,12 +91,16 @@ class FyersAPI(BrokerBase):
             DataFrame with [ts, open, high, low, close, volume]
         """
         try:
+            # Convert datetime to Unix timestamp
+            start_timestamp = int(start.timestamp())
+            end_timestamp = int(end.timestamp())
+            
             payload = {
                 "symbol": self._symbol(symbol),
                 "resolution": resolution,
-                "date_format": "1",  # Unix timestamp
-                "range_from": start.strftime("%Y-%m-%d"),
-                "range_to": end.strftime("%Y-%m-%d"),
+                "date_format": "0",  # Unix timestamp format
+                "range_from": str(start_timestamp),
+                "range_to": str(end_timestamp),
                 "cont_flag": "1"  # Continuous data
             }
             
@@ -324,7 +328,7 @@ class FyersAPI(BrokerBase):
     
     def get_ltp(self, symbol: str) -> Optional[float]:
         """
-        Get Last Traded Price.
+        Get Last Traded Price using official v3 API.
         
         Args:
             symbol: Trading symbol

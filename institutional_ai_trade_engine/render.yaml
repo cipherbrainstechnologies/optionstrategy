@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: trading-engine-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn src.api.server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: BROKER
+        value: FYERS
+      - key: PORTFOLIO_CAPITAL
+        value: 400000
+      - key: RISK_PCT_PER_TRADE
+        value: 1.5
+      - key: FYERS_CLIENT_ID
+        sync: false
+      - key: FYERS_SECRET_KEY
+        sync: false
+      - key: FYERS_ACCESS_TOKEN
+        sync: false
+      - key: FYERS_REDIRECT_URI
+        sync: false
+      - key: FYERS_SANDBOX
+        value: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: trading-engine-db
+          property: connectionString
