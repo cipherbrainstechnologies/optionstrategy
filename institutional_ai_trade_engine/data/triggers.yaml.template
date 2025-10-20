@@ -1,0 +1,33 @@
+# Custom triggers file (optional)
+# Use this to define specific entry/exit levels for symbols
+
+# Format:
+# SYMBOL:
+#   pre_breakout: price level for pre-breakout entry (half size)
+#   stop: stop loss level
+#   t1: first target
+#   t2: second target
+#   notes: any additional notes
+
+# Example: AUROPHARMA custom triggers
+AUROPHARMA:
+  pre_breakout: 1110
+  stop: 1048
+  t1: 1245
+  t2: 1320
+  notes: "Hourly pre-breakout setup from user specification"
+
+# Example: RELIANCE custom setup
+RELIANCE:
+  pre_breakout: 2500
+  stop: 2380
+  t1: 2680
+  t2: 2860
+  notes: "Weekly breakout setup"
+
+# Instructions:
+# 1. Copy this file and rename to triggers.yaml (remove .template)
+# 2. Add your custom triggers for specific symbols
+# 3. The engine will use these levels if provided
+# 4. Otherwise, it will calculate levels from 3WI patterns automatically
+# 5. This is OPTIONAL - engine works without custom triggers

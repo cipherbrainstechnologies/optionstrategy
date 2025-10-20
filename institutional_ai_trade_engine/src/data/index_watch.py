@@ -1,11 +1,12 @@
 """
 Index watch module for monitoring BankNifty and Nifty indices.
+Supports FYERS, Angel One, and Mock brokers via broker abstraction.
 """
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional
-from .angel_client import AngelClient
-from ..core.config import Config
+from ..core.config import Settings
+from .broker_base import get_broker
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +14,10 @@ class IndexWatch:
     """Index monitoring and analysis."""
     
     def __init__(self):
-        self.client = AngelClient()
-        self.nifty_symbol = Config.NIFTY_SYMBOL
-        self.banknifty_symbol = Config.BANKNIFTY_SYMBOL
+        settings = Settings()
+        self.client = get_broker(settings)
+        self.nifty_symbol = Settings.NIFTY_SYMBOL
+        self.banknifty_symbol = Settings.BANKNIFTY_SYMBOL
         
     def get_index_snapshot(self) -> Dict:
         """
