@@ -7,6 +7,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import logging
+import pyotp
 
 from ..core.config import Config
 
@@ -21,7 +22,7 @@ class AngelClient:
         self.api_secret = Config.ANGEL_API_SECRET
         self.totp_secret = Config.ANGEL_TOTP_SECRET
         
-        self.base_url = "https://apiconnect.angelbroking.com"
+        self.base_url = "https://apiconnect.angelone.in"
         self.session = requests.Session()
         self.access_token = None
         self.refresh_token = None
@@ -30,13 +31,20 @@ class AngelClient:
     def authenticate(self):
         """Authenticate with Angel One API."""
         try:
-            # Get access token
-            auth_url = f"{self.base_url}/rest/auth/angelbroking/user/v1/loginByPassword"
+            # Generate TOTP
+            totp_code = self._generate_totp()
+            if not totp_code:
+                logger.error("Failed to generate TOTP code")
+                return False
+            
+            # Get access token using MPIN authentication
+            auth_url = f"{self.base_url}/rest/auth/angelbroking/user/v1/loginByMpin"
             
             payload = {
                 "clientcode": self.client_code,
-                "password": self.api_secret,
-                "totp": self._generate_totp()
+                "mpin": self.api_secret,
+                "totp": totp_code,
+                "state": "live"
             }
             
             headers = {
@@ -51,9 +59,18 @@ class AngelClient:
             }
             
             response = self.session.post(auth_url, json=payload, headers=headers)
+            logger.debug(f"Auth response status: {response.status_code}")
+            logger.debug(f"Auth response text: {response.text}")
+            
             response.raise_for_status()
             
-            data = response.json()
+            try:
+                data = response.json()
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response: {e}")
+                logger.error(f"Response text: {response.text}")
+                return False
+            
             if data.get("status"):
                 self.access_token = data["data"]["jwtToken"]
                 self.refresh_token = data["data"]["refreshToken"]
@@ -70,9 +87,16 @@ class AngelClient:
     
     def _generate_totp(self):
         """Generate TOTP for authentication."""
-        # This is a placeholder - implement proper TOTP generation
-        # You would use pyotp library for this
-        return "123456"
+        try:
+            if not self.totp_secret:
+                logger.error("TOTP secret not configured")
+                return None
+            
+            totp = pyotp.TOTP(self.totp_secret)
+            return totp.now()
+        except Exception as e:
+            logger.error(f"Error generating TOTP: {e}")
+            return None
     
     def _ensure_authenticated(self):
         """Ensure we have a valid access token."""

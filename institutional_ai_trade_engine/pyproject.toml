@@ -13,7 +13,8 @@ dependencies = [
   "python-dotenv",
   "pytz",
   "gspread",
-  "oauth2client"
+  "oauth2client",
+  "pyotp"
 ]
 
 [build-system]
