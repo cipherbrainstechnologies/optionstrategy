@@ -185,8 +185,14 @@ class DataFetcher:
             List[Dict]: List of enabled instruments
         """
         try:
-            from ..storage.db import get_db_session
-            from sqlalchemy import text
+            try:
+                from ..storage.db import get_db_session  # type: ignore
+            except Exception:
+                from storage.db import get_db_session  # type: ignore
+            try:
+                from ..core.config import Config  # type: ignore
+            except Exception:
+                from core.config import Config  # type: ignore
             
             db = get_db_session()
             try:

@@ -10,6 +10,15 @@ from ..storage.db import get_db_session
 from ..storage.models import Position, LedgerEntry, Signal
 from ..strategy.portfolio_mode import PortfolioMode
 
+try:
+    from ..exec.eod_report import run as run_eod  # type: ignore
+except Exception:
+    from exec.eod_report import run as run_eod  # type: ignore
+try:
+    from ..core.config import Settings  # type: ignore
+except Exception:
+    from core.config import Settings  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 

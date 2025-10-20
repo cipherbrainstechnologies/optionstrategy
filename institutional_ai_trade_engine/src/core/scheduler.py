@@ -5,17 +5,22 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from pytz import timezone
 import logging
 
-# Import job modules
-from ..exec import scanner, tracker, near_breakout, eod_report
-from ..data import index_watch
-from .config import Config
-
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+from .config import Config  # local import safe
+
 def run():
     """Run the trading engine scheduler."""
+    # Lazy imports to avoid package-relative import issues during tests
+    try:
+        from ..exec import scanner, tracker, near_breakout, eod_report  # type: ignore
+        from ..data import index_watch  # type: ignore
+    except Exception:
+        from exec import scanner, tracker, near_breakout, eod_report  # type: ignore
+        from data import index_watch  # type: ignore
+
     tz = timezone(Config.TIMEZONE)
     s = BlockingScheduler(timezone=tz)
     

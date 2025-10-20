@@ -8,7 +8,10 @@ from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 from datetime import datetime
 
-from ..core.config import Config
+try:
+    from ..core.config import Config  # type: ignore
+except Exception:
+    from core.config import Config  # type: ignore
 
 logger = logging.getLogger(__name__)
 

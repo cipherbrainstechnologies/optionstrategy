@@ -50,6 +50,8 @@ class Settings:
     
     # Timezone
     TIMEZONE: str = os.getenv("TIMEZONE", "Asia/Kolkata")
+    # Paper trading mode (legacy compatibility)
+    PAPER_MODE: bool = os.getenv("PAPER_MODE", "true").lower() in ("1", "true", "yes", "y")
     
     # Risk management
     MAX_OPEN_RISK_PCT: float = 6.0
@@ -148,17 +150,26 @@ class Settings:
         broker = cls.BROKER.upper()
         
         if broker == "FYERS":
-            from ..data.fyers_client import FyersAPI
+            try:
+                from ..data.fyers_client import FyersAPI  # type: ignore
+            except Exception:
+                from data.fyers_client import FyersAPI  # type: ignore
             return FyersAPI(cls)
         
         elif broker == "ANGEL":
-            from ..data.angel_client import AngelClient
+            try:
+                from ..data.angel_client import AngelClient  # type: ignore
+            except Exception:
+                from data.angel_client import AngelClient  # type: ignore
             # Note: Will need to update AngelClient to match BrokerBase interface
             logger.warning("Angel One client may need interface updates")
             return AngelClient()
         
         elif broker == "MOCK":
-            from ..data.mock_exchange import MockExchange
+            try:
+                from ..data.mock_exchange import MockExchange  # type: ignore
+            except Exception:
+                from data.mock_exchange import MockExchange  # type: ignore
             return MockExchange(cls)
         
         else:
@@ -176,6 +187,8 @@ class Config:
     TIMEZONE = Settings.TIMEZONE
     MAX_OPEN_RISK_PCT = Settings.MAX_OPEN_RISK_PCT
     POSITION_SIZING_PLAN = Settings.POSITION_SIZING_PLAN
+    # Legacy flag expected by older tests/scripts
+    PAPER_MODE = Settings.PAPER_MODE or Settings.FYERS_SANDBOX
     
     # Angel One (existing)
     ANGEL_API_KEY = Settings.ANGEL_API_KEY

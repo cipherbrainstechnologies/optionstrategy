@@ -5,8 +5,15 @@ Supports FYERS, Angel One, and Mock brokers via broker abstraction.
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional
-from ..core.config import Settings
+try:
+    from ..core.config import Settings  # type: ignore
+except Exception:
+    from core.config import Settings  # type: ignore
 from .broker_base import get_broker
+try:
+    from ..data.fetch import DataFetcher  # type: ignore
+except Exception:
+    from data.fetch import DataFetcher  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +21,7 @@ class IndexWatch:
     """Index monitoring and analysis."""
     
     def __init__(self):
-        settings = Settings()
-        self.client = get_broker(settings)
+        self.client = get_broker(Settings)
         self.nifty_symbol = Settings.NIFTY_SYMBOL
         self.banknifty_symbol = Settings.BANKNIFTY_SYMBOL
         
@@ -148,9 +154,6 @@ class IndexWatch:
         except Exception as e:
             logger.error(f"Error in index monitoring: {e}")
 
-# Global instance for scheduler
-index_watch = IndexWatch()
-
 def monitor():
     """Wrapper function for scheduler."""
-    index_watch.monitor()
+    IndexWatch().monitor()

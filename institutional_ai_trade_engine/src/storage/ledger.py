@@ -3,7 +3,10 @@ Learning ledger for tracking trade performance and insights.
 """
 from datetime import datetime
 from sqlalchemy import text
-from .db import get_db_session
+try:
+    from .db import get_db_session  # type: ignore
+except Exception:
+    from storage.db import get_db_session  # type: ignore
 
 def log_trade(symbol, opened_ts, closed_ts, pnl, rr, tag):
     """Log a completed trade to the ledger."""

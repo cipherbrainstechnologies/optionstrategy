@@ -9,7 +9,11 @@ from typing import Dict, List, Optional
 import logging
 import pyotp
 
-from ..core.config import Config
+# Support both package and direct src path imports
+try:
+    from ..core.config import Config  # type: ignore
+except Exception:  # ImportError or ValueError if run without package context
+    from core.config import Config  # type: ignore
 
 logger = logging.getLogger(__name__)
 

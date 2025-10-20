@@ -20,6 +20,50 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_database():
     """Initialize database with schema."""
+    # Ensure DB directory exists
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+
+    # Lightweight migration: add missing columns if needed before indexes
+    with engine.connect() as conn:
+        # Check instruments table for in_portfolio column
+        try:
+            result = conn.execute(text("PRAGMA table_info(instruments)"))
+            columns = {row[1] for row in result.fetchall()}
+            if "in_portfolio" not in columns:
+                conn.execute(text("ALTER TABLE instruments ADD COLUMN in_portfolio INTEGER DEFAULT 0"))
+            if "avg_portfolio_price" not in columns:
+                conn.execute(text("ALTER TABLE instruments ADD COLUMN avg_portfolio_price REAL"))
+            if "portfolio_qty" not in columns:
+                conn.execute(text("ALTER TABLE instruments ADD COLUMN portfolio_qty INTEGER"))
+        except Exception:
+            # Table might not exist yet; schema creation below will handle it
+            pass
+
+        # Check positions table for newly added columns
+        try:
+            result = conn.execute(text("PRAGMA table_info(positions)"))
+            pos_columns = {row[1] for row in result.fetchall()}
+            # Ensure columns used in schema and indexes exist
+            if "original_qty" not in pos_columns:
+                conn.execute(text("ALTER TABLE positions ADD COLUMN original_qty INTEGER"))
+            if "plan_size" not in pos_columns:
+                conn.execute(text("ALTER TABLE positions ADD COLUMN plan_size REAL"))
+            if "pnl" not in pos_columns:
+                conn.execute(text("ALTER TABLE positions ADD COLUMN pnl REAL DEFAULT 0"))
+            if "rr" not in pos_columns:
+                conn.execute(text("ALTER TABLE positions ADD COLUMN rr REAL DEFAULT 0"))
+            if "exit_reason" not in pos_columns:
+                conn.execute(text("ALTER TABLE positions ADD COLUMN exit_reason TEXT"))
+            if "signal_id" not in pos_columns:
+                conn.execute(text("ALTER TABLE positions ADD COLUMN signal_id TEXT"))
+            if "metadata" not in pos_columns:
+                conn.execute(text("ALTER TABLE positions ADD COLUMN metadata TEXT"))
+        except Exception:
+            # Table might not exist yet; schema creation below will handle it
+            pass
+
+        conn.commit()
+
     # Read schema file
     schema_path = Path(__file__).parent / "schema.sql"
     with open(schema_path, 'r') as f:

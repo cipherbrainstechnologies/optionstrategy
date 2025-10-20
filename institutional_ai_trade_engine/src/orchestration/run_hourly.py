@@ -7,6 +7,15 @@ from ..core.config import Settings, get_settings
 from ..storage.db import get_db_session
 from ..strategy.execution_hourly import HourlyExecutor
 
+try:
+    from ..exec.tracker import run as run_tracker  # type: ignore
+except Exception:
+    from exec.tracker import run as run_tracker  # type: ignore
+try:
+    from ..core.config import Settings  # type: ignore
+except Exception:
+    from core.config import Settings  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 

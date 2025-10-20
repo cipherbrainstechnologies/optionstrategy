@@ -6,15 +6,26 @@ from datetime import datetime
 from typing import List, Dict
 import pandas as pd
 
-from ..data.fetch import DataFetcher
-from ..strategy.three_week_inside import detect_3wi, breakout, is_near_breakout, calculate_breakout_strength
-from ..strategy.filters import filters_ok, get_filter_score
-from ..storage.db import get_db_session
-from ..storage.ledger import log_trade
-from ..alerts.telegram import send_trade_alert
-from ..alerts.sheets import update_master_sheet
-from ..core.risk import size_position, calculate_targets, check_risk_limits
-from ..core.config import Config
+try:
+    from ..data.fetch import DataFetcher  # type: ignore
+    from ..strategy.three_week_inside import detect_3wi, breakout, is_near_breakout, calculate_breakout_strength  # type: ignore
+    from ..strategy.filters import filters_ok, get_filter_score  # type: ignore
+    from ..storage.db import get_db_session  # type: ignore
+    from ..storage.ledger import log_trade  # type: ignore
+    from ..alerts.telegram import send_trade_alert  # type: ignore
+    from ..alerts.sheets import update_master_sheet  # type: ignore
+    from ..core.risk import size_position, calculate_targets, check_risk_limits  # type: ignore
+    from ..core.config import Config  # type: ignore
+except Exception:
+    from data.fetch import DataFetcher  # type: ignore
+    from strategy.three_week_inside import detect_3wi, breakout, is_near_breakout, calculate_breakout_strength  # type: ignore
+    from strategy.filters import filters_ok, get_filter_score  # type: ignore
+    from storage.db import get_db_session  # type: ignore
+    from storage.ledger import log_trade  # type: ignore
+    from alerts.telegram import send_trade_alert  # type: ignore
+    from alerts.sheets import update_master_sheet  # type: ignore
+    from core.risk import size_position, calculate_targets, check_risk_limits  # type: ignore
+    from core.config import Config  # type: ignore
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)

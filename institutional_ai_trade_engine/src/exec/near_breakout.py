@@ -6,10 +6,31 @@ from datetime import datetime
 from typing import List, Dict
 import pandas as pd
 
-from ..data.fetch import DataFetcher
-from ..strategy.three_week_inside import is_near_breakout, calculate_breakout_strength
-from ..storage.db import get_db_session
-from ..alerts.telegram import send_alert
+try:
+    from ..core.config import Config  # type: ignore
+except Exception:
+    from core.config import Config  # type: ignore
+
+try:
+    from ..data.fetch import DataFetcher  # type: ignore
+except Exception:
+    from data.fetch import DataFetcher  # type: ignore
+
+try:
+    from ..strategy.three_week_inside import is_near_breakout, calculate_breakout_strength  # type: ignore
+except Exception:
+    from strategy.three_week_inside import is_near_breakout, calculate_breakout_strength  # type: ignore
+
+try:
+    from ..storage.db import get_db_session  # type: ignore
+except Exception:
+    from storage.db import get_db_session  # type: ignore
+
+try:
+    from ..alerts.telegram import send_alert  # type: ignore
+except Exception:
+    from alerts.telegram import send_alert  # type: ignore
+
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)

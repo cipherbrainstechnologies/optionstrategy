@@ -13,6 +13,15 @@ from ..data.indicators import compute
 from ..storage.models import Signal, Setup, Instrument, generate_signal_id
 import json
 
+try:
+    from ..exec.scanner import run as run_scanner  # type: ignore
+except Exception:
+    from exec.scanner import run as run_scanner  # type: ignore
+try:
+    from ..core.config import Settings  # type: ignore
+except Exception:
+    from core.config import Settings  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 
