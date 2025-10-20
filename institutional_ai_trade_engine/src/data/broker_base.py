@@ -148,3 +148,43 @@ class BrokerBase(ABC):
             Last traded price or None
         """
         pass
+
+
+def get_broker(settings):
+    """
+    Factory function to get broker instance based on settings.
+    
+    Args:
+        settings: Settings object with broker configuration
+        
+    Returns:
+        BrokerBase: Configured broker instance
+        
+    Raises:
+        ValueError: If broker type is invalid or not configured
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    broker = settings.BROKER.upper()
+    
+    if broker == "FYERS":
+        from .fyers_client import FyersAPI
+        logger.info("Using FYERS broker")
+        return FyersAPI(settings)
+    
+    elif broker == "ANGEL":
+        from .angel_client import AngelClient
+        logger.info("Using Angel One broker")
+        return AngelClient(settings)
+    
+    elif broker == "MOCK":
+        from .mock_exchange import MockExchange
+        logger.info("Using Mock broker (offline testing)")
+        return MockExchange(settings)
+    
+    else:
+        raise ValueError(
+            f"Invalid broker: {broker}. "
+            f"Valid options: FYERS, ANGEL, MOCK"
+        )
