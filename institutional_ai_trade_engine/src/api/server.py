@@ -1,8 +1,10 @@
-﻿from fastapi import FastAPI
+﻿from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 from typing import List
+import asyncio
+import logging
 
 from src.storage.db import init_database, engine
 from sqlalchemy import text
@@ -26,6 +28,12 @@ class ActionPayload(BaseModel):
     action: str
     symbol: str | None = None
 
+class ScanPayload(BaseModel):
+    dry_run: bool = False
+
+# Global variable to track scan status
+scan_status = {"running": False, "last_scan": None, "results": None}
+
 @app.on_event("startup")
 def startup_event():
     try:
@@ -46,16 +54,23 @@ def get_overview():
     capital = float(os.getenv("PORTFOLIO_CAPITAL", "400000"))
     paper_str = os.getenv("PAPER_MODE", "true").lower()
     paper_mode = paper_str in ("1", "true", "yes", "y")
+    
+    # Include scan status
+    last_scan = scan_status.get("last_scan", "--:--")
+    if scan_status.get("running"):
+        last_scan = "Scanning..."
+    
     return {
         "engineStatus": "Running",
         "paperMode": paper_mode,
-        "lastScan": "--:--",
+        "lastScan": last_scan,
         "capital": capital,
         "openRiskPct": 0.0,
         "pnlDay": 0.0,
         "positions": positions_count,
         "signals": 0,
         "winRate": 0,
+        "scanRunning": scan_status.get("running", False),
     }
 
 @app.get("/positions")
@@ -90,3 +105,60 @@ def get_positions():
 @app.post("/actions")
 def post_actions(payload: ActionPayload):
     return {"ok": True, "action": payload.action, "symbol": payload.symbol}
+
+def run_scanner_background(dry_run: bool = False):
+    """Run scanner in background thread."""
+    try:
+        # Import scanner here to avoid circular imports
+        from src.exec.scanner import run as scanner_run
+        scan_status["running"] = True
+        scan_status["last_scan"] = None
+        scan_status["results"] = None
+        
+        # Run the scanner
+        results = scanner_run(dry_run)
+        
+        # Update status
+        from datetime import datetime
+        scan_status["running"] = False
+        scan_status["last_scan"] = datetime.now().strftime("%H:%M")
+        scan_status["results"] = results
+        
+        logging.info(f"Manual scan completed at {scan_status['last_scan']}")
+        
+    except Exception as e:
+        scan_status["running"] = False
+        scan_status["last_scan"] = f"Error: {str(e)}"
+        scan_status["results"] = None
+        logging.error(f"Manual scan failed: {e}")
+
+@app.post("/scan")
+def manual_scan(payload: ScanPayload, background_tasks: BackgroundTasks):
+    """Trigger a manual scan."""
+    if scan_status.get("running", False):
+        return {"ok": False, "message": "Scan already in progress"}
+    
+    # Start background scan
+    background_tasks.add_task(run_scanner_background, payload.dry_run)
+    
+    return {
+        "ok": True, 
+        "message": "Manual scan started",
+        "dry_run": payload.dry_run
+    }
+
+@app.get("/scan/status")
+def get_scan_status():
+    """Get current scan status."""
+    return scan_status
+
+@app.get("/scan/results")
+def get_scan_results():
+    """Get latest scan results."""
+    return scan_status.get("results", {
+        "total_instruments": 0,
+        "scanned_instruments": [],
+        "valid_setups": [],
+        "breakouts": [],
+        "errors": []
+    })

@@ -15,3 +15,11 @@ export async function apiPost<T extends Record<string, unknown>>(path: string, b
   if (!res.ok) throw new Error('POST failed')
   return res.json()
 }
+
+export async function manualScan(dryRun: boolean = false) {
+  return apiPost('/scan', { dry_run: dryRun })
+}
+
+export async function getScanStatus() {
+  return apiGet('/scan/status')
+}

@@ -5,8 +5,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import logging
+from sqlalchemy import text
 
-from .angel_client import AngelClient
 from .indicators import compute, compute_weekly_indicators
 
 logger = logging.getLogger(__name__)
@@ -14,8 +14,22 @@ logger = logging.getLogger(__name__)
 class DataFetcher:
     """Data fetching and processing utilities."""
     
-    def __init__(self):
-        self.client = AngelClient()
+    def __init__(self, broker=None):
+        """
+        Initialize DataFetcher with broker client.
+        
+        Args:
+            broker: Broker instance (if None, will get from settings)
+        """
+        if broker is None:
+            try:
+                from ..core.config import Settings
+                self.client = Settings.get_broker()
+            except Exception:
+                from core.config import Settings
+                self.client = Settings.get_broker()
+        else:
+            self.client = broker
     
     def get_weekly_data(self, symbol: str, weeks: int = 52) -> Optional[pd.DataFrame]:
         """
@@ -33,27 +47,31 @@ class DataFetcher:
             to_date = datetime.now()
             from_date = to_date - timedelta(weeks=weeks)
             
-            # Get historical data
-            hist_data = self.client.get_historical_data(
-                symbol,
-                interval="1WEEK",
-                from_date=from_date.strftime("%Y-%m-%d"),
-                to_date=to_date.strftime("%Y-%m-%d")
-            )
+            # Use broker abstraction for historical data
+            df = self.client.candles(symbol, "week", weeks)
             
-            if not hist_data:
+            if df.empty:
                 logger.warning(f"No historical data for {symbol}")
                 return None
             
-            # Convert to DataFrame
-            df = pd.DataFrame(hist_data)
-            df.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            # Ensure proper column names
+            if 'ts' in df.columns:
+                df = df.rename(columns={'ts': 'timestamp'})
+            
+            # Reset index to make timestamp a column
+            df = df.reset_index()
+            
+            # Ensure required columns exist
+            required_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            if not all(col in df.columns for col in required_cols):
+                logger.error(f"Missing required columns for {symbol}: {df.columns.tolist()}")
+                return None
             
             # Convert data types
             for col in ['open', 'high', 'low', 'close', 'volume']:
-                df[col] = pd.to_numeric(df[col])
+                df[col] = pd.to_numeric(df[col], errors='coerce')
             
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            # Sort by timestamp
             df = df.sort_values('timestamp').reset_index(drop=True)
             
             # Compute indicators
@@ -77,31 +95,31 @@ class DataFetcher:
             DataFrame: Daily OHLCV data with indicators
         """
         try:
-            # Calculate date range
-            to_date = datetime.now()
-            from_date = to_date - timedelta(days=days)
+            # Use broker abstraction for historical data
+            df = self.client.candles(symbol, "day", days)
             
-            # Get historical data
-            hist_data = self.client.get_historical_data(
-                symbol,
-                interval="1DAY",
-                from_date=from_date.strftime("%Y-%m-%d"),
-                to_date=to_date.strftime("%Y-%m-%d")
-            )
-            
-            if not hist_data:
+            if df.empty:
                 logger.warning(f"No historical data for {symbol}")
                 return None
             
-            # Convert to DataFrame
-            df = pd.DataFrame(hist_data)
-            df.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            # Ensure proper column names
+            if 'ts' in df.columns:
+                df = df.rename(columns={'ts': 'timestamp'})
+            
+            # Reset index to make timestamp a column
+            df = df.reset_index()
+            
+            # Ensure required columns exist
+            required_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            if not all(col in df.columns for col in required_cols):
+                logger.error(f"Missing required columns for {symbol}: {df.columns.tolist()}")
+                return None
             
             # Convert data types
             for col in ['open', 'high', 'low', 'close', 'volume']:
-                df[col] = pd.to_numeric(df[col])
+                df[col] = pd.to_numeric(df[col], errors='coerce')
             
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            # Sort by timestamp
             df = df.sort_values('timestamp').reset_index(drop=True)
             
             # Compute indicators
@@ -125,31 +143,31 @@ class DataFetcher:
             DataFrame: Hourly OHLCV data with indicators
         """
         try:
-            # Calculate date range
-            to_date = datetime.now()
-            from_date = to_date - timedelta(days=days)
+            # Use broker abstraction for historical data
+            df = self.client.candles(symbol, "1h", days * 24)  # 24 hours per day
             
-            # Get historical data
-            hist_data = self.client.get_historical_data(
-                symbol,
-                interval="1HOUR",
-                from_date=from_date.strftime("%Y-%m-%d"),
-                to_date=to_date.strftime("%Y-%m-%d")
-            )
-            
-            if not hist_data:
+            if df.empty:
                 logger.warning(f"No historical data for {symbol}")
                 return None
             
-            # Convert to DataFrame
-            df = pd.DataFrame(hist_data)
-            df.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            # Ensure proper column names
+            if 'ts' in df.columns:
+                df = df.rename(columns={'ts': 'timestamp'})
+            
+            # Reset index to make timestamp a column
+            df = df.reset_index()
+            
+            # Ensure required columns exist
+            required_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            if not all(col in df.columns for col in required_cols):
+                logger.error(f"Missing required columns for {symbol}: {df.columns.tolist()}")
+                return None
             
             # Convert data types
             for col in ['open', 'high', 'low', 'close', 'volume']:
-                df[col] = pd.to_numeric(df[col])
+                df[col] = pd.to_numeric(df[col], errors='coerce')
             
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            # Sort by timestamp
             df = df.sort_values('timestamp').reset_index(drop=True)
             
             # Compute indicators

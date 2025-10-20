@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 class Scanner:
     """Scanner for 3WI setups and breakouts."""
     
-    def __init__(self):
-        self.fetcher = DataFetcher()
+    def __init__(self, broker=None):
+        self.fetcher = DataFetcher(broker)
         self.dry_run = False
     
     def scan_all_instruments(self) -> List[Dict]:
@@ -42,7 +42,7 @@ class Scanner:
         Scan all enabled instruments for 3WI setups.
         
         Returns:
-            List[Dict]: List of valid setups found
+            List[Dict]: Detailed scan results with stock information
         """
         try:
             # Get enabled instruments
@@ -51,39 +51,115 @@ class Scanner:
                 logger.warning("No enabled instruments found")
                 return []
             
-            valid_setups = []
+            scan_results = {
+                "total_instruments": len(instruments),
+                "scanned_instruments": [],
+                "valid_setups": [],
+                "breakouts": [],
+                "errors": []
+            }
             
             for instrument in instruments:
-                symbol = instrument['symbol']
-                logger.info(f"Scanning {symbol}...")
-                
-                # Get weekly data
-                weekly_df = self.fetcher.get_weekly_data(symbol, weeks=52)
-                if not self.fetcher.validate_data_quality(weekly_df):
-                    logger.warning(f"Invalid data quality for {symbol}")
-                    continue
-                
-                # Detect 3WI patterns
-                patterns = detect_3wi(weekly_df)
-                if not patterns:
-                    continue
-                
-                # Check each pattern
-                for pattern in patterns:
-                    if self._validate_setup(symbol, pattern, weekly_df):
-                        valid_setups.append({
-                            'symbol': symbol,
-                            'pattern': pattern,
-                            'weekly_data': weekly_df,
-                            'timestamp': datetime.now().isoformat()
+                try:
+                    symbol = instrument['symbol']
+                    logger.info(f"Scanning {symbol}...")
+                    
+                    # Get weekly data
+                    weekly_df = self.fetcher.get_weekly_data(symbol, weeks=52)
+                    if not self.fetcher.validate_data_quality(weekly_df):
+                        logger.warning(f"Invalid data quality for {symbol}")
+                        scan_results["errors"].append({
+                            "symbol": symbol,
+                            "error": "Invalid data quality"
                         })
+                        continue
+                    
+                    # Compute indicators
+                    weekly_df = compute(weekly_df)
+                    latest = weekly_df.iloc[-1]
+                    
+                    # Create instrument scan result
+                    instrument_result = {
+                        "symbol": symbol,
+                        "current_price": float(latest["close"]),
+                        "rsi": float(latest.get("RSI", 0)),
+                        "wma20": float(latest.get("WMA20", 0)),
+                        "wma50": float(latest.get("WMA50", 0)),
+                        "wma100": float(latest.get("WMA100", 0)),
+                        "volume_ratio": float(latest.get("VOL_X20D", 0)),
+                        "atr_pct": float(latest.get("ATR_PCT", 0)),
+                        "patterns_found": 0,
+                        "filters_passed": 0,
+                        "breakout_detected": False,
+                        "strategy_status": "No Pattern",
+                        "mother_high": None,
+                        "mother_low": None,
+                        "quality_score": 0
+                    }
+                    
+                    # Detect 3WI patterns
+                    patterns = detect_3wi(weekly_df)
+                    instrument_result["patterns_found"] = len(patterns)
+                    
+                    if patterns:
+                        instrument_result["strategy_status"] = "Pattern Detected"
+                        
+                        # Check each pattern
+                        for pattern in patterns:
+                            instrument_result["mother_high"] = float(pattern.get("mother_high", 0))
+                            instrument_result["mother_low"] = float(pattern.get("mother_low", 0))
+                            
+                            if self._validate_setup(symbol, pattern, weekly_df):
+                                instrument_result["filters_passed"] = 4
+                                instrument_result["strategy_status"] = "Valid Setup"
+                                instrument_result["quality_score"] = get_filter_score(latest)
+                                
+                                valid_setups.append({
+                                    'symbol': symbol,
+                                    'pattern': pattern,
+                                    'weekly_data': weekly_df,
+                                    'timestamp': datetime.now().isoformat()
+                                })
+                                
+                                # Check for breakout
+                                breakout_direction = breakout(weekly_df, pattern.get("index", 0))
+                                if breakout_direction == "up":
+                                    instrument_result["breakout_detected"] = True
+                                    instrument_result["strategy_status"] = "Breakout Confirmed"
+                            else:
+                                # Count how many filters passed
+                                passed_filters = sum([
+                                    latest['RSI'] > 55,
+                                    latest['WMA20'] > latest['WMA50'] > latest['WMA100'],
+                                    latest['VOL_X20D'] >= 1.5,
+                                    latest['ATR_PCT'] < 0.06
+                                ])
+                                instrument_result["filters_passed"] = passed_filters
+                                instrument_result["strategy_status"] = f"Pattern Found - {passed_filters}/4 Filters"
+                    
+                    scan_results["scanned_instruments"].append(instrument_result)
+                
+                except Exception as e:
+                    logger.error(f"Error scanning {instrument.get('symbol', 'unknown')}: {e}")
+                    scan_results["errors"].append({
+                        "symbol": instrument.get('symbol', 'unknown'),
+                        "error": str(e)
+                    })
+                    continue
             
-            logger.info(f"Found {len(valid_setups)} valid setups")
-            return valid_setups
+            scan_results["valid_setups"] = valid_setups
+            logger.info(f"Scan completed: {len(valid_setups)} setups found")
+            return scan_results
             
         except Exception as e:
             logger.error(f"Error scanning instruments: {e}")
-            return []
+            return {
+                "total_instruments": 0,
+                "scanned_instruments": [],
+                "valid_setups": [],
+                "breakouts": [],
+                "errors": [{"error": str(e)}]
+            }
     
     def _validate_setup(self, symbol: str, pattern: Dict, weekly_df: pd.DataFrame) -> bool:
         """
@@ -160,15 +236,12 @@ class Scanner:
             List[Dict]: List of confirmed breakouts
         """
         try:
-            # Get all active setups
+            # Get all active setups (simplified query without setup_id reference)
             db = get_db_session()
             try:
                 query = text("""
                     SELECT * FROM setups 
-                    WHERE id NOT IN (
-                        SELECT DISTINCT setup_id FROM positions 
-                        WHERE setup_id IS NOT NULL
-                    )
+                    ORDER BY created_at DESC
                 """)
                 setups = db.execute(query).fetchall()
                 
@@ -316,6 +389,9 @@ class Scanner:
         
         Args:
             dry_run: If True, don't create actual positions
+            
+        Returns:
+            dict: Scan results with setups and breakouts found
         """
         try:
             self.dry_run = dry_run
@@ -329,17 +405,42 @@ class Scanner:
             breakouts = self.check_breakouts()
             logger.info(f"Found {len(breakouts)} confirmed breakouts")
             
+            results = {
+                "setups": setups,
+                "breakouts": breakouts,
+                "dry_run": dry_run,
+                "timestamp": datetime.now().isoformat()
+            }
+            
             logger.info("Scanner run completed")
+            return results
             
         except Exception as e:
             logger.error(f"Error in scanner run: {e}")
+            return {
+                "setups": [],
+                "breakouts": [],
+                "dry_run": dry_run,
+                "timestamp": datetime.now().isoformat(),
+                "error": str(e)
+            }
 
 # Global scanner instance
-scanner = Scanner()
+scanner = None
 
 def run(dry_run: bool = False):
     """Wrapper function for scheduler."""
-    scanner.run(dry_run)
+    global scanner
+    if scanner is None:
+        # Initialize scanner with proper broker
+        try:
+            from ..core.config import Settings
+            broker = Settings.get_broker()
+        except Exception:
+            from core.config import Settings
+            broker = Settings.get_broker()
+        scanner = Scanner(broker)
+    return scanner.run(dry_run)
 
 if __name__ == "__main__":
     import sys

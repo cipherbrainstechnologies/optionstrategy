@@ -4,7 +4,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableHeader, TableRow, TableHead, TableCell, TableBody } from "@/components/ui/table";
-import { RefreshCcw, Play, Pause } from "lucide-react";
+import { RefreshCcw, Play, Pause, Search, Loader2 } from "lucide-react";
 
 type Overview = {
   engineStatus: string;
@@ -16,6 +16,7 @@ type Overview = {
   positions: number;
   signals: number;
   winRate: number;
+  scanRunning?: boolean;
 };
 
 type Position = {
@@ -27,6 +28,32 @@ type Position = {
   ltp: number;
   status: string;
   pnl: number;
+};
+
+type ScanResult = {
+  symbol: string;
+  current_price: number;
+  rsi: number;
+  wma20: number;
+  wma50: number;
+  wma100: number;
+  volume_ratio: number;
+  atr_pct: number;
+  patterns_found: number;
+  filters_passed: number;
+  breakout_detected: boolean;
+  strategy_status: string;
+  mother_high: number | null;
+  mother_low: number | null;
+  quality_score: number;
+};
+
+type ScanResults = {
+  total_instruments: number;
+  scanned_instruments: ScanResult[];
+  valid_setups: any[];
+  breakouts: any[];
+  errors: any[];
 };
 
 function StatCard(props: { title: string; value: string | number | boolean; suffix?: string; color?: string }) {
@@ -48,6 +75,8 @@ export default function Dashboard() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [engine, setEngine] = useState<string>("Starting");
   const [positions, setPositions] = useState<Position[]>([]);
+  const [scanning, setScanning] = useState<boolean>(false);
+  const [scanResults, setScanResults] = useState<ScanResults | null>(null);
 
   async function refreshOverview() {
     try {
@@ -56,6 +85,7 @@ export default function Dashboard() {
       const data: Overview = await res.json();
       setOverview(data);
       if (data && data.engineStatus) setEngine(data.engineStatus);
+      if (data && data.scanRunning !== undefined) setScanning(data.scanRunning);
     } catch {}
   }
 
@@ -68,9 +98,30 @@ export default function Dashboard() {
     } catch {}
   }
 
+  async function refreshScanResults() {
+    try {
+      const res = await fetch("/api/scan/results", { cache: "no-store" });
+      if (!res.ok) return;
+      const data: ScanResults = await res.json();
+      // Ensure data has the expected structure
+      if (data && typeof data === 'object') {
+        setScanResults({
+          total_instruments: data.total_instruments || 0,
+          scanned_instruments: data.scanned_instruments || [],
+          valid_setups: data.valid_setups || [],
+          breakouts: data.breakouts || [],
+          errors: data.errors || []
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching scan results:', error);
+    }
+  }
+
   useEffect(() => {
     refreshOverview();
     refreshPositions();
+    refreshScanResults();
     const i = setInterval(() => {
       refreshOverview();
     }, 60000);
@@ -94,6 +145,55 @@ export default function Dashboard() {
     } catch {}
   }
 
+  async function handleManualScan(dryRun: boolean = false) {
+    if (scanning) {
+      alert("Scan already in progress. Please wait for it to complete.");
+      return;
+    }
+    
+    try {
+      setScanning(true);
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dry_run: dryRun }),
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        alert(error.message || "Failed to start scan");
+        setScanning(false);
+        return;
+      }
+      
+      const result = await res.json();
+      alert(result.message || "Manual scan started");
+      
+      // Start polling for scan completion
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await fetch("/api/scan/status", { cache: "no-store" });
+          if (statusRes.ok) {
+            const status = await statusRes.json();
+            if (!status.running) {
+              setScanning(false);
+              clearInterval(pollInterval);
+              await refreshOverview();
+              await refreshPositions();
+              await refreshScanResults();
+            }
+          }
+        } catch (e) {
+          // Ignore polling errors
+        }
+      }, 2000);
+      
+    } catch (error) {
+      alert("Failed to start manual scan");
+      setScanning(false);
+    }
+  }
+
   const o: Overview =
     overview || ({
       engineStatus: engine,
@@ -112,6 +212,24 @@ export default function Dashboard() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Institutional AI Trade Engine</h1>
         <div className="flex items-center space-x-3">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => handleManualScan(false)}
+            disabled={scanning}
+          >
+            {scanning ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Search className="w-4 h-4 mr-1" />}
+            {scanning ? "Scanning..." : "Manual Scan"}
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => handleManualScan(true)}
+            disabled={scanning}
+          >
+            {scanning ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Search className="w-4 h-4 mr-1" />}
+            {scanning ? "Scanning..." : "Dry Run Scan"}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => handleAction("pause-resume")}>
             {engine === "Running" ? <Pause className="w-4 h-4 mr-1" /> : <Play className="w-4 h-4 mr-1" />}
             {engine === "Running" ? "Pause Engine" : "Resume Engine"}
@@ -149,6 +267,163 @@ export default function Dashboard() {
               <div>BANKNIFTY: 48,920 (+0.54%)</div>
               <div>IV Zone: Calm</div>
               <div>Last Scan: {o.lastScan}</div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="scanner" className="mt-4">
+          <Card>
+            <CardHeader className="flex justify-between">
+              <div className="font-semibold">Scanner Control</div>
+              <div className="flex items-center space-x-2">
+                <div className="text-sm text-muted-foreground">
+                  {scanning ? "Scan in progress..." : `Last scan: ${o.lastScan}`}
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={refreshScanResults}
+                  disabled={scanning}
+                >
+                  <RefreshCcw className="w-4 h-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <h3 className="font-medium">Manual Scan</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Run a complete scan of all enabled instruments to detect new 3WI patterns and breakouts.
+                  </p>
+                  <div className="flex space-x-2">
+                    <Button 
+                      onClick={() => handleManualScan(false)}
+                      disabled={scanning}
+                      className="flex-1"
+                    >
+                      {scanning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
+                      {scanning ? "Scanning..." : "Run Live Scan"}
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      onClick={() => handleManualScan(true)}
+                      disabled={scanning}
+                      className="flex-1"
+                    >
+                      {scanning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
+                      {scanning ? "Scanning..." : "Dry Run"}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="font-medium">Auto Scan Schedule</h3>
+                  <div className="text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span>Pre-Open Scan:</span>
+                      <span className="font-mono">09:25 IST</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Close Scan:</span>
+                      <span className="font-mono">15:10 IST</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Frequency:</span>
+                      <span>Daily (Mon-Fri)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="border-t pt-4">
+                <h3 className="font-medium mb-2">Scan Information</h3>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p>• Manual scans can be run at any time, even outside market hours</p>
+                  <p>• Live scans will create actual positions if breakouts are confirmed</p>
+                  <p>• Dry run scans only detect patterns without creating positions</p>
+                  <p>• Scan results are logged and can be viewed in the system logs</p>
+                </div>
+              </div>
+
+              {scanResults && scanResults.scanned_instruments && scanResults.scanned_instruments.length > 0 ? (
+                <div className="border-t pt-4">
+                  <h3 className="font-medium mb-4">Latest Scan Results</h3>
+                  <div className="text-sm text-muted-foreground mb-4">
+                    Scanned {scanResults.total_instruments || 0} instruments • 
+                    Found {scanResults.valid_setups?.length || 0} valid setups • 
+                    {scanResults.breakouts?.length || 0} breakouts confirmed
+                  </div>
+                  
+                  <div className="max-h-96 overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Symbol</TableHead>
+                          <TableHead>Price</TableHead>
+                          <TableHead>RSI</TableHead>
+                          <TableHead>Trend</TableHead>
+                          <TableHead>Volume</TableHead>
+                          <TableHead>Patterns</TableHead>
+                          <TableHead>Filters</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {scanResults.scanned_instruments.map((result, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="font-medium">{result.symbol}</TableCell>
+                            <TableCell>₹{result.current_price.toFixed(2)}</TableCell>
+                            <TableCell className={result.rsi > 55 ? "text-green-600" : "text-red-600"}>
+                              {result.rsi.toFixed(1)}
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-xs">
+                                <div>WMA20: {result.wma20.toFixed(1)}</div>
+                                <div>WMA50: {result.wma50.toFixed(1)}</div>
+                                <div>WMA100: {result.wma100.toFixed(1)}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell className={result.volume_ratio >= 1.5 ? "text-green-600" : "text-red-600"}>
+                              {result.volume_ratio.toFixed(1)}x
+                            </TableCell>
+                            <TableCell>{result.patterns_found}</TableCell>
+                            <TableCell>
+                              <span className={result.filters_passed === 4 ? "text-green-600" : "text-orange-600"}>
+                                {result.filters_passed}/4
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <span className={`px-2 py-1 rounded text-xs ${
+                                result.strategy_status === "Breakout Confirmed" ? "bg-green-100 text-green-800" :
+                                result.strategy_status === "Valid Setup" ? "bg-blue-100 text-blue-800" :
+                                result.strategy_status.includes("Pattern") ? "bg-yellow-100 text-yellow-800" :
+                                "bg-gray-100 text-gray-800"
+                              }`}>
+                                {result.strategy_status}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              ) : scanning ? (
+                <div className="border-t pt-4">
+                  <h3 className="font-medium mb-4">Scan in Progress</h3>
+                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Scanning instruments... Please wait.</span>
+                  </div>
+                </div>
+              ) : scanResults && scanResults.scanned_instruments && scanResults.scanned_instruments.length === 0 ? (
+                <div className="border-t pt-4">
+                  <h3 className="font-medium mb-4">Latest Scan Results</h3>
+                  <div className="text-sm text-muted-foreground">
+                    No scan results available. Run a manual scan to see detailed results.
+                  </div>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </TabsContent>
