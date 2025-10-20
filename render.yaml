@@ -3,7 +3,7 @@ services:
     name: trading-engine-api
     env: python
     buildCommand: pip install -r institutional_ai_trade_engine/requirements.txt
-    startCommand: cd institutional_ai_trade_engine && python start.py
+    startCommand: python app.py
     envVars:
       - key: BROKER
         value: FYERS
