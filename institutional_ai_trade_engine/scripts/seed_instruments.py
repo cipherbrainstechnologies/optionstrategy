@@ -85,11 +85,11 @@ def seed_instruments(list_name: str):
         db = get_db_session()
         try:
             # Check if we're using PostgreSQL and fix the schema if needed
-            from src.core.config import Config
-            config = Config()
-            logger.info(f"Database URL: {config.DATABASE_URL[:50]}...")  # Debug log
+            from src.core.config import Settings
+            settings = Settings()
+            logger.info(f"Database URL: {settings.DATABASE_URL[:50]}...")  # Debug log
             
-            if config.DATABASE_URL.startswith("postgresql://"):
+            if settings.DATABASE_URL.startswith("postgresql://"):
                 # Fix PostgreSQL auto-increment issue by recreating the table
                 logger.info("Detected PostgreSQL, ensuring proper auto-increment setup...")
                 try:
