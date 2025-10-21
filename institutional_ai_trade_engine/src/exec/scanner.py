@@ -36,8 +36,13 @@ class Scanner:
     """Scanner for 3WI setups and breakouts."""
     
     def __init__(self, broker=None):
-        self.fetcher = DataFetcher(broker)
-        self.dry_run = False
+        try:
+            self.fetcher = DataFetcher(broker)
+            self.dry_run = False
+            logger.info("Scanner initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize DataFetcher: {e}")
+            raise e
     
     def scan_all_instruments(self) -> List[Dict]:
         """
@@ -48,10 +53,19 @@ class Scanner:
         """
         try:
             # Get enabled instruments
+            logger.info("Fetching enabled instruments...")
             instruments = self.fetcher.get_enabled_instruments()
             if not instruments:
                 logger.warning("No enabled instruments found")
-                return []
+                return {
+                    "total_instruments": 0,
+                    "scanned_instruments": [],
+                    "valid_setups": [],
+                    "breakouts": [],
+                    "errors": [{"error": "No enabled instruments found in database"}]
+                }
+            
+            logger.info(f"Found {len(instruments)} enabled instruments to scan")
             
             scan_results = {
                 "total_instruments": len(instruments),
@@ -61,13 +75,21 @@ class Scanner:
                 "errors": []
             }
             
-            for instrument in instruments:
+            for i, instrument in enumerate(instruments):
                 try:
                     symbol = instrument['symbol']
-                    logger.info(f"Scanning {symbol}...")
+                    logger.info(f"Scanning {symbol} ({i+1}/{len(instruments)})...")
                     
                     # Get weekly data
                     weekly_df = self.fetcher.get_weekly_data(symbol, weeks=52)
+                    if weekly_df is None:
+                        logger.warning(f"No data available for {symbol}")
+                        scan_results["errors"].append({
+                            "symbol": symbol,
+                            "error": "No data available"
+                        })
+                        continue
+                        
                     if not self.fetcher.validate_data_quality(weekly_df):
                         logger.warning(f"Invalid data quality for {symbol}")
                         scan_results["errors"].append({
@@ -443,12 +465,28 @@ def run(dry_run: bool = False):
     if scanner is None:
         # Initialize scanner with proper broker
         try:
-            from ..core.config import Settings
-            broker = Settings.get_broker()
-        except Exception:
-            from src.core.config import Settings
-            broker = Settings.get_broker()
-        scanner = Scanner(broker)
+            try:
+                from ..core.config import Settings
+                broker = Settings.get_broker()
+                logger.info(f"Initializing scanner with broker: {type(broker).__name__}")
+            except Exception as e:
+                logger.warning(f"Failed to import from relative path: {e}")
+                from src.core.config import Settings
+                broker = Settings.get_broker()
+                logger.info(f"Initialized scanner with broker: {type(broker).__name__}")
+            scanner = Scanner(broker)
+        except Exception as e:
+            logger.error(f"Failed to initialize scanner: {e}")
+            # Return error result instead of crashing
+            return {
+                "total_instruments": 0,
+                "scanned_instruments": [],
+                "valid_setups": [],
+                "breakouts": [],
+                "errors": [{"error": f"Scanner initialization failed: {str(e)}"}],
+                "dry_run": dry_run,
+                "timestamp": datetime.now().isoformat()
+            }
     return scanner.run(dry_run)
 
 if __name__ == "__main__":
