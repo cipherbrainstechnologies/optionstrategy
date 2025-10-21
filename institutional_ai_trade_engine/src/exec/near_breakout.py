@@ -9,27 +9,27 @@ import pandas as pd
 try:
     from ..core.config import Config  # type: ignore
 except Exception:
-    from core.config import Config  # type: ignore
+    from src.core.config import Config  # type: ignore
 
 try:
     from ..data.fetch import DataFetcher  # type: ignore
 except Exception:
-    from data.fetch import DataFetcher  # type: ignore
+    from src.data.fetch import DataFetcher  # type: ignore
 
 try:
     from ..strategy.three_week_inside import is_near_breakout, calculate_breakout_strength  # type: ignore
 except Exception:
-    from strategy.three_week_inside import is_near_breakout, calculate_breakout_strength  # type: ignore
+    from src.strategy.three_week_inside import is_near_breakout, calculate_breakout_strength  # type: ignore
 
 try:
     from ..storage.db import get_db_session  # type: ignore
 except Exception:
-    from storage.db import get_db_session  # type: ignore
+    from src.storage.db import get_db_session  # type: ignore
 
 try:
     from ..alerts.telegram import send_alert  # type: ignore
 except Exception:
-    from alerts.telegram import send_alert  # type: ignore
+    from src.alerts.telegram import send_alert  # type: ignore
 
 from sqlalchemy import text
 

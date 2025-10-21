@@ -26,7 +26,7 @@ class DataFetcher:
                 from ..core.config import Settings
                 self.client = Settings.get_broker()
             except Exception:
-                from core.config import Settings
+                from src.core.config import Settings
                 self.client = Settings.get_broker()
         else:
             self.client = broker
@@ -206,11 +206,11 @@ class DataFetcher:
             try:
                 from ..storage.db import get_db_session  # type: ignore
             except Exception:
-                from storage.db import get_db_session  # type: ignore
+                from src.storage.db import get_db_session  # type: ignore
             try:
                 from ..core.config import Config  # type: ignore
             except Exception:
-                from core.config import Config  # type: ignore
+                from src.core.config import Config  # type: ignore
             
             db = get_db_session()
             try:

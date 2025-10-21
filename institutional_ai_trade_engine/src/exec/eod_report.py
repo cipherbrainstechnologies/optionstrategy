@@ -9,26 +9,26 @@ import pandas as pd
 try:
     from ..core.config import Config  # type: ignore
 except Exception:
-    from core.config import Config  # type: ignore
+    from src.core.config import Config  # type: ignore
 
 try:
     from ..storage.ledger import get_performance_summary  # type: ignore
 except Exception:
-    from storage.ledger import get_performance_summary  # type: ignore
+    from src.storage.ledger import get_performance_summary  # type: ignore
 
 try:
     from ..storage.db import get_db_session  # type: ignore
 except Exception:
-    from storage.db import get_db_session  # type: ignore
+    from src.storage.db import get_db_session  # type: ignore
 
 try:
     from ..alerts.telegram import send_eod_report  # type: ignore
 except Exception:
-    from alerts.telegram import send_eod_report  # type: ignore
+    from src.alerts.telegram import send_eod_report  # type: ignore
 try:
     from ..alerts.sheets import update_eod_summary  # type: ignore
 except Exception:
-    from alerts.sheets import update_eod_summary  # type: ignore
+    from src.alerts.sheets import update_eod_summary  # type: ignore
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)

@@ -17,7 +17,7 @@ except Exception:
 try:
     from ..core.config import Settings  # type: ignore
 except Exception:
-    from core.config import Settings  # type: ignore
+    from src.core.config import Settings  # type: ignore
 
 logger = logging.getLogger(__name__)
 

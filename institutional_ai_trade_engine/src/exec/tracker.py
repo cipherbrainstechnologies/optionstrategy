@@ -9,34 +9,34 @@ import pandas as pd
 try:
     from ..core.config import Config  # type: ignore
 except Exception:
-    from core.config import Config  # type: ignore
+    from src.core.config import Config  # type: ignore
 
 try:
     from ..storage.db import get_db_session  # type: ignore
 except Exception:
-    from storage.db import get_db_session  # type: ignore
+    from src.storage.db import get_db_session  # type: ignore
 
 try:
     from ..data.fetch import DataFetcher  # type: ignore
 except Exception:
-    from data.fetch import DataFetcher  # type: ignore
+    from src.data.fetch import DataFetcher  # type: ignore
 
 try:
     from ..core.risk import calculate_position_metrics  # type: ignore
 except Exception:
-    from core.risk import calculate_position_metrics  # type: ignore
+    from src.core.risk import calculate_position_metrics  # type: ignore
 try:
     from ..storage.ledger import log_trade  # type: ignore
 except Exception:
-    from storage.ledger import log_trade  # type: ignore
+    from src.storage.ledger import log_trade  # type: ignore
 try:
     from ..alerts.telegram import send_trade_alert  # type: ignore
 except Exception:
-    from alerts.telegram import send_trade_alert  # type: ignore
+    from src.alerts.telegram import send_trade_alert  # type: ignore
 try:
     from ..alerts.sheets import update_master_sheet  # type: ignore
 except Exception:
-    from alerts.sheets import update_master_sheet  # type: ignore
+    from src.alerts.sheets import update_master_sheet  # type: ignore
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)

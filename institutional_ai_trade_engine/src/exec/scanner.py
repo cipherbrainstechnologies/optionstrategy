@@ -17,15 +17,15 @@ try:
     from ..core.risk import size_position, calculate_targets, check_risk_limits  # type: ignore
     from ..core.config import Config  # type: ignore
 except Exception:
-    from data.fetch import DataFetcher  # type: ignore
-    from strategy.three_week_inside import detect_3wi, breakout, is_near_breakout, calculate_breakout_strength  # type: ignore
-    from strategy.filters import filters_ok, get_filter_score  # type: ignore
-    from storage.db import get_db_session  # type: ignore
-    from storage.ledger import log_trade  # type: ignore
-    from alerts.telegram import send_trade_alert  # type: ignore
-    from alerts.sheets import update_master_sheet  # type: ignore
-    from core.risk import size_position, calculate_targets, check_risk_limits  # type: ignore
-    from core.config import Config  # type: ignore
+    from src.data.fetch import DataFetcher  # type: ignore
+    from src.strategy.three_week_inside import detect_3wi, breakout, is_near_breakout, calculate_breakout_strength  # type: ignore
+    from src.strategy.filters import filters_ok, get_filter_score  # type: ignore
+    from src.storage.db import get_db_session  # type: ignore
+    from src.storage.ledger import log_trade  # type: ignore
+    from src.alerts.telegram import send_trade_alert  # type: ignore
+    from src.alerts.sheets import update_master_sheet  # type: ignore
+    from src.core.risk import size_position, calculate_targets, check_risk_limits  # type: ignore
+    from src.core.config import Config  # type: ignore
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
@@ -437,7 +437,7 @@ def run(dry_run: bool = False):
             from ..core.config import Settings
             broker = Settings.get_broker()
         except Exception:
-            from core.config import Settings
+            from src.core.config import Settings
             broker = Settings.get_broker()
         scanner = Scanner(broker)
     return scanner.run(dry_run)

@@ -8,12 +8,12 @@ from typing import Dict, Optional
 try:
     from ..core.config import Settings  # type: ignore
 except Exception:
-    from core.config import Settings  # type: ignore
+    from src.core.config import Settings  # type: ignore
 from .broker_base import get_broker
 try:
     from ..data.fetch import DataFetcher  # type: ignore
 except Exception:
-    from data.fetch import DataFetcher  # type: ignore
+    from src.data.fetch import DataFetcher  # type: ignore
 
 logger = logging.getLogger(__name__)
 

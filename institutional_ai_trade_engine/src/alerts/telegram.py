@@ -9,7 +9,7 @@ from datetime import datetime
 try:
     from ..core.config import Config  # type: ignore
 except Exception:
-    from core.config import Config  # type: ignore
+    from src.core.config import Config  # type: ignore
 
 logger = logging.getLogger(__name__)
 

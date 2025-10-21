@@ -13,7 +13,7 @@ import pyotp
 try:
     from ..core.config import Config  # type: ignore
 except Exception:  # ImportError or ValueError if run without package context
-    from core.config import Config  # type: ignore
+    from src.core.config import Config  # type: ignore
 
 logger = logging.getLogger(__name__)
 

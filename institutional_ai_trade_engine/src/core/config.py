@@ -160,14 +160,14 @@ class Settings:
             try:
                 from ..data.fyers_client import FyersAPI  # type: ignore
             except Exception:
-                from data.fyers_client import FyersAPI  # type: ignore
+                from src.data.fyers_client import FyersAPI  # type: ignore
             return FyersAPI(cls)
         
         elif broker == "ANGEL":
             try:
                 from ..data.angel_client import AngelClient  # type: ignore
             except Exception:
-                from data.angel_client import AngelClient  # type: ignore
+                from src.data.angel_client import AngelClient  # type: ignore
             # Note: Will need to update AngelClient to match BrokerBase interface
             logger.warning("Angel One client may need interface updates")
             return AngelClient()
@@ -176,7 +176,7 @@ class Settings:
             try:
                 from ..data.mock_exchange import MockExchange  # type: ignore
             except Exception:
-                from data.mock_exchange import MockExchange  # type: ignore
+                from src.data.mock_exchange import MockExchange  # type: ignore
             return MockExchange(cls)
         
         else:
