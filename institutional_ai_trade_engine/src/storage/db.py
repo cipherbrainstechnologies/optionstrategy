@@ -12,7 +12,10 @@ load_dotenv()
 
 def get_engine():
     """Get SQLAlchemy engine with cloud-ready configuration."""
-    from ..core.config import Settings
+    try:
+        from ..core.config import Settings
+    except Exception:
+        from src.core.config import Settings
     settings = Settings()
     
     db_url = settings.DATABASE_URL

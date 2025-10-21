@@ -49,12 +49,17 @@ class FyersAPI(BrokerBase):
                 "3) Add to .env and re-run"
             )
         
+        # Ensure log directory exists
+        log_path = getattr(settings, 'LOG_PATH', './data/')
+        if not log_path.endswith('/'):
+            log_path += '/'
+        
         # Initialize FYERS client using official v3 API
         self.client = fyersModel.FyersModel(
             token=settings.FYERS_ACCESS_TOKEN,
             is_async=False,
             client_id=settings.FYERS_CLIENT_ID,
-            log_path=getattr(settings, 'LOG_PATH', '')
+            log_path=log_path
         )
         
         logger.info(f"Initialized FYERS client: {self.name()}")

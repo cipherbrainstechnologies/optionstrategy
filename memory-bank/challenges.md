@@ -851,10 +851,84 @@ message = f"Symbol: {escape_markdown(symbol)}\nPrice: ₹{price}"
 
 ---
 
+### Challenge #011 – Empty Instruments Database on Deployment
+
+- **Date Discovered**: 2025-10-21
+- **Severity**: 🔴 Critical
+- **Status**: ✅ Solved
+- **Category**: Database, Deployment
+- **Owner**: System Architect
+
+**Description**: 
+Scanner fails with "No module named 'data.fetch'" because database has no instruments to scan, causing import chain to fail early on deployment.
+
+**Impact**:
+- Scanner cannot run without stock symbols
+- API returns error instead of scan results
+- Trading engine appears broken on deployment
+- Violates "autonomous operation" principle
+
+**Root Cause**:
+- Database initialized but not seeded with stock symbols
+- Scanner expects instruments table to have enabled stocks
+- Empty database causes early failure in import chain
+
+**Solution** (Implemented):
+```python
+# Auto-seed function in API server startup
+def ensure_instruments_seeded():
+    """Ensure instruments table has stock symbols."""
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT COUNT(*) as count FROM instruments WHERE enabled = 1"))
+            row = result.first()
+            count = int(row.count) if row and row.count is not None else 0
+            
+            if count > 0:
+                logging.info(f"Instruments already seeded: {count} enabled instruments")
+                return
+            
+            # No instruments, seed with Nifty 500
+            logging.info("No instruments found, seeding with Nifty 500...")
+            from scripts.seed_instruments import seed_instruments
+            if seed_instruments('nifty500'):
+                logging.info("Successfully seeded Nifty 500 instruments")
+            else:
+                logging.error("Failed to seed instruments")
+    except Exception as e:
+        logging.error(f"Error checking/seeding instruments: {e}")
+
+# Updated startup event
+@app.on_event("startup")
+def startup_event():
+    try:
+        init_database()
+        ensure_instruments_seeded()  # Auto-seed on startup
+    except Exception as e:
+        logging.error(f"Startup error: {e}")
+```
+
+**Additional Fixes**:
+1. **Fixed Import Paths**: Updated all modules to use consistent `src.` prefix imports
+2. **Fixed Seed Script**: Resolved duplicate symbols in Nifty lists
+3. **Fixed Log Path**: Corrected FYERS client log path configuration
+
+**Status**: ✅ Solved
+- Auto-seeding implemented on API startup
+- Database seeded with 169 unique Nifty 500 stocks
+- Scanner runs successfully with instruments
+- API returns proper scan results instead of errors
+
+**Related**:
+- Decision #009 (FYERS-first architecture)
+- Architecture: Data Layer, Storage Layer
+
+---
+
 ## Challenge Statistics
 
-**Total Challenges**: 10
-- Critical: 2 (1 solved, 1 mitigated)
+**Total Challenges**: 11
+- Critical: 3 (2 solved, 1 mitigated)
 - High: 3 (3 mitigated)
 - Medium: 4 (3 open/future, 1 mitigated)
 - Low: 3 (3 mitigated)

@@ -9,10 +9,10 @@ import logging
 from pathlib import Path
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from storage.db import get_db_session, init_database
-from core.config import Config
+from src.storage.db import get_db_session, init_database
+from src.core.config import Config
 from sqlalchemy import text
 
 # Setup logging
@@ -26,8 +26,8 @@ NIFTY_50 = [
     "SUNPHARMA", "TITAN", "ULTRACEMCO", "WIPRO", "NESTLEIND", "ONGC", "POWERGRID",
     "NTPC", "TECHM", "TATAMOTORS", "TATASTEEL", "BAJFINANCE", "HCLTECH", "DRREDDY",
     "JSWSTEEL", "TATACONSUM", "BRITANNIA", "DIVISLAB", "EICHERMOT", "GRASIM",
-    "HDFCLIFE", "HEROMOTOCO", "HINDALCO", "INDUSINDBK", "NTPC", "SBILIFE", "SHREECEM",
-    "TATACONSUM", "UPL", "WIPRO", "APOLLOHOSP", "BAJAJFINSV", "COALINDIA", "CIPLA"
+    "HDFCLIFE", "HEROMOTOCO", "HINDALCO", "INDUSINDBK", "SBILIFE", "SHREECEM",
+    "UPL", "APOLLOHOSP", "BAJAJFINSV", "COALINDIA", "CIPLA"
 ]
 
 # Nifty 100 stocks (additional 50)
@@ -47,17 +47,15 @@ NIFTY_500_SAMPLE = [
     "ABB", "ACC", "ADANIGREEN", "ADANIPOWER", "AJANTPHARM", "ALBK", "AMBUJACEM",
     "APOLLOTYRE", "ASHOKLEY", "AUROPHARMA", "BALRAMCHIN", "BANKBARODA", "BATAINDIA",
     "BEL", "BEML", "BHEL", "BPCL", "CANFINHOME", "CENTRALBK", "CESC", "CGPOWER",
-    "CHAMBLFERT", "CIPLA", "COCHINSHIP", "CUMMINSIND", "DALBHARAT", "DCBBANK",
+    "CHAMBLFERT", "COCHINSHIP", "CUMMINSIND", "DALBHARAT", "DCBBANK",
     "DHFL", "DISHTV", "DLF", "EDELWEISS", "EXIDEIND", "FEDERALBNK", "FORTIS",
     "GLENMARK", "GMRINFRA", "GODREJIND", "GRANULES", "HATHWAY", "HEG", "HEXAWARE",
     "HINDUJAVENT", "HUDCO", "IBREALEST", "IDBI", "IDFCFIRSTB", "IGL", "INDIANB",
     "IOC", "IPCALAB", "JKCEMENT", "JUBLPHARMA", "JUSTDIAL", "KAJARIA", "KANSAINER",
-    "KOTAKBANK", "L&TFH", "LICHSGFIN", "LTTS", "LUXIND", "MANAPPURAM", "MARICO",
-    "MCDOWELL-N", "MFSL", "MINDTREE", "MOTHERSON", "MRF", "MUTHOOTFIN", "NAUKRI",
-    "NMDC", "OBEROI", "OFSS", "OIL", "PAGEIND", "PEL", "PETRONET", "PIDILITIND",
-    "PNB", "PVR", "RBLBANK", "RECLTD", "RELAXO", "SAIL", "SIEMENS", "SRF",
+    "L&TFH", "LICHSGFIN", "LTTS", "LUXIND", "MANAPPURAM", "MARICO",
+    "NMDC", "OBEROI", "OFSS", "OIL", "PAGEIND", "RECLTD", "RELAXO", "SAIL", "SIEMENS", "SRF",
     "TATAPOWER", "TORNTPHARM", "TRENT", "TVSMOTORS", "UBL", "VEDL", "VOLTAS",
-    "WIPRO", "YESBANK", "ZEEL", "ZOMATO"
+    "YESBANK", "ZEEL", "ZOMATO"
 ]
 
 def seed_instruments(list_name: str):
@@ -89,8 +87,9 @@ def seed_instruments(list_name: str):
             db.execute(text("DELETE FROM instruments"))
             db.commit()
             
-            # Insert new instruments
-            for symbol in stocks:
+            # Remove duplicates and insert new instruments
+            unique_stocks = list(set(stocks))
+            for symbol in unique_stocks:
                 query = text("""
                     INSERT INTO instruments (symbol, exchange, enabled)
                     VALUES (:symbol, :exchange, :enabled)

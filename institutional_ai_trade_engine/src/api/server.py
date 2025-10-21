@@ -36,12 +36,35 @@ class ScanPayload(BaseModel):
 # Global variable to track scan status
 scan_status = {"running": False, "last_scan": None, "results": None}
 
+def ensure_instruments_seeded():
+    """Ensure instruments table has stock symbols."""
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT COUNT(*) as count FROM instruments WHERE enabled = 1"))
+            row = result.first()
+            count = int(row.count) if row and row.count is not None else 0
+            
+            if count > 0:
+                logging.info(f"Instruments already seeded: {count} enabled instruments")
+                return
+            
+            # No instruments, seed with Nifty 500
+            logging.info("No instruments found, seeding with Nifty 500...")
+            from scripts.seed_instruments import seed_instruments
+            if seed_instruments('nifty500'):
+                logging.info("Successfully seeded Nifty 500 instruments")
+            else:
+                logging.error("Failed to seed instruments")
+    except Exception as e:
+        logging.error(f"Error checking/seeding instruments: {e}")
+
 @app.on_event("startup")
 def startup_event():
     try:
         init_database()
-    except Exception:
-        pass
+        ensure_instruments_seeded()
+    except Exception as e:
+        logging.error(f"Startup error: {e}")
 
 @app.get("/health")
 def health_check():

@@ -53,7 +53,7 @@ class Settings:
     # Paths
     DATA_DIR: str = os.getenv("DATA_DIR", "./data")
     DB_PATH: str = os.getenv("DB_PATH", "./data/trade_engine.sqlite")
-    LOG_PATH: str = os.getenv("LOG_PATH", "./data/engine.log")
+    LOG_PATH: str = os.getenv("LOG_PATH", "./data/")
     
     # Timezone
     TIMEZONE: str = os.getenv("TIMEZONE", "Asia/Kolkata")
