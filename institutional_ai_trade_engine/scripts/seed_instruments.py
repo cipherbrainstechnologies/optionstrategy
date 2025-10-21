@@ -87,6 +87,8 @@ def seed_instruments(list_name: str):
             # Check if we're using PostgreSQL and fix the schema if needed
             from src.core.config import Config
             config = Config()
+            logger.info(f"Database URL: {config.DATABASE_URL[:50]}...")  # Debug log
+            
             if config.DATABASE_URL.startswith("postgresql://"):
                 # Fix PostgreSQL auto-increment issue by recreating the table
                 logger.info("Detected PostgreSQL, ensuring proper auto-increment setup...")
@@ -112,6 +114,7 @@ def seed_instruments(list_name: str):
                     logger.warning(f"Failed to recreate table: {e}")
                     db.rollback()
             else:
+                logger.info("Detected SQLite, clearing existing instruments...")
                 # Clear existing instruments for SQLite
                 db.execute(text("DELETE FROM instruments"))
                 db.commit()
