@@ -68,7 +68,7 @@ class Signal(Base):
     status = Column(String(20), default="PENDING")  # PENDING, TRIGGERED, EXPIRED
     trigger_ts = Column(DateTime, nullable=False, index=True)
     triggered_at = Column(DateTime)
-    metadata = Column(Text)  # JSON string
+    meta_data = Column(Text)  # JSON string
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -131,7 +131,7 @@ class Position(Base):
     rr = Column(Float, default=0.0)
     exit_reason = Column(String(100))  # "STOP_HIT", "TARGET_1", "TARGET_2", "MANUAL"
     signal_id = Column(String(100), index=True)  # Link to signal that created this
-    metadata = Column(Text)  # JSON for additional info
+    meta_data = Column(Text)  # JSON for additional info
 
 
 class Instrument(Base):
@@ -178,7 +178,7 @@ class LedgerEntry(Base):
     exit_price = Column(Float)
     qty = Column(Integer)
     hold_duration_hours = Column(Float)
-    metadata = Column(Text)  # JSON
+    meta_data = Column(Text)  # JSON
 
 
 # Helper function to generate unique IDs
