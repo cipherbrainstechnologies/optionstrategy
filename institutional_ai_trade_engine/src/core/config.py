@@ -161,7 +161,18 @@ class Settings:
                 from ..data.fyers_client import FyersAPI  # type: ignore
             except Exception:
                 from src.data.fyers_client import FyersAPI  # type: ignore
-            return FyersAPI(cls)
+            
+            try:
+                fyers_client = FyersAPI(cls)
+                # Test authentication by making a simple API call
+                test_response = fyers_client.client.get_profile()
+                if test_response.get('s') == 'error' and test_response.get('code') == -16:
+                    logger.warning("FYERS authentication failed, falling back to MockExchange")
+                    return cls._get_mock_broker()
+                return fyers_client
+            except Exception as e:
+                logger.warning(f"FYERS initialization failed: {e}, falling back to MockExchange")
+                return cls._get_mock_broker()
         
         elif broker == "ANGEL":
             try:
@@ -181,6 +192,15 @@ class Settings:
         
         else:
             raise ValueError(f"Unknown broker: {broker}")
+    
+    @classmethod
+    def _get_mock_broker(cls):
+        """Helper method to get MockExchange broker."""
+        try:
+            from ..data.mock_exchange import MockExchange  # type: ignore
+        except Exception:
+            from src.data.mock_exchange import MockExchange  # type: ignore
+        return MockExchange(cls)
 
 
 # Legacy Config class for backward compatibility
