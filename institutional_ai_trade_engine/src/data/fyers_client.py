@@ -37,7 +37,7 @@ class FyersAPI(BrokerBase):
         
         # Validate required credentials
         missing = []
-        for key in ["FYERS_CLIENT_ID", "FYERS_ACCESS_TOKEN"]:
+        for key in ["FYERS_CLIENT_ID", "FYERS_SECRET_KEY"]:
             if not getattr(settings, key, None):
                 missing.append(key)
         
@@ -45,9 +45,12 @@ class FyersAPI(BrokerBase):
             raise ValueError(
                 f"Missing FYERS credentials: {missing}\n"
                 "1) Visit https://myapi.fyers.in/dashboard/ to create app\n"
-                "2) Generate access token (OAuth flow)\n"
-                "3) Add to .env and re-run"
+                "2) Add CLIENT_ID and SECRET_KEY to .env\n"
+                "3) Run with dynamic token generation"
             )
+        
+        # Check if we have an access token, if not we'll generate one
+        self.access_token = getattr(settings, 'FYERS_ACCESS_TOKEN', None)
         
         # Ensure log directory exists
         log_path = getattr(settings, 'LOG_PATH', './data/')
@@ -66,7 +69,7 @@ class FyersAPI(BrokerBase):
         
         # Initialize FYERS client using official v3 API
         self.client = fyersModel.FyersModel(
-            token=settings.FYERS_ACCESS_TOKEN,
+            token=self.access_token,
             is_async=False,
             client_id=settings.FYERS_CLIENT_ID,
             log_path=log_path
@@ -77,6 +80,75 @@ class FyersAPI(BrokerBase):
     def name(self) -> str:
         """Return broker name with mode."""
         return f"FYERS_{'SANDBOX' if self._sandbox else 'LIVE'}"
+    
+    def get_auth_url(self) -> str:
+        """
+        Generate FYERS authentication URL for manual token renewal.
+        
+        Returns:
+            str: Authentication URL
+        """
+        try:
+            from urllib.parse import urlencode
+            
+            # Generate auth URL
+            base_url = "https://api-t1.fyers.in/api/v3" if self._sandbox else "https://api.fyers.in/api/v3"
+            
+            auth_params = {
+                "client_id": self.settings.FYERS_CLIENT_ID,
+                "redirect_uri": self.settings.FYERS_REDIRECT_URI,
+                "response_type": "code",
+                "state": "sample_state"
+            }
+            
+            auth_url = f"{base_url}/generate-authcode?{urlencode(auth_params)}"
+            return auth_url
+            
+        except Exception as e:
+            logger.error(f"Failed to generate auth URL: {e}")
+            return None
+    
+    def refresh_token_if_needed(self) -> bool:
+        """
+        Check if token is valid and provide instructions for renewal if needed.
+        
+        Returns:
+            bool: True if token is valid, False if renewal needed
+        """
+        try:
+            # Test current token
+            response = self.client.get_profile()
+            
+            if response.get('s') == 'ok':
+                logger.info("FYERS token is valid")
+                return True
+            elif response.get('code') == -16:  # Authentication error
+                logger.warning("FYERS token expired - manual renewal required")
+                
+                # Generate auth URL for manual renewal
+                auth_url = self.get_auth_url()
+                if auth_url:
+                    logger.info("=" * 80)
+                    logger.info("FYERS TOKEN RENEWAL REQUIRED")
+                    logger.info("=" * 80)
+                    logger.info("1. Visit this URL to authenticate:")
+                    logger.info(f"   {auth_url}")
+                    logger.info("2. Complete the OAuth flow")
+                    logger.info("3. Copy the new access token")
+                    logger.info("4. Update your environment variable FYERS_ACCESS_TOKEN")
+                    logger.info("5. Restart the application")
+                    logger.info("=" * 80)
+                else:
+                    logger.error("Failed to generate FYERS auth URL")
+                
+                return False
+            else:
+                logger.warning(f"Unexpected FYERS response: {response}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error checking FYERS token: {e}")
+            return False
     
     def _symbol(self, symbol: str) -> str:
         """
