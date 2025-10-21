@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.storage.db import get_db_session, init_database
 from src.core.config import Config
+from src.storage.models import Instrument
 from sqlalchemy import text
 
 # Setup logging
@@ -90,18 +91,16 @@ def seed_instruments(list_name: str):
             # Remove duplicates and insert new instruments
             unique_stocks = list(set(stocks))
             for symbol in unique_stocks:
-                query = text("""
-                    INSERT INTO instruments (symbol, exchange, enabled)
-                    VALUES (:symbol, :exchange, :enabled)
-                """)
-                db.execute(query, {
-                    "symbol": symbol,
-                    "exchange": "NSE",
-                    "enabled": 1
-                })
+                # Use SQLAlchemy ORM for proper auto-increment handling
+                instrument = Instrument(
+                    symbol=symbol,
+                    exchange="NSE",
+                    enabled=True
+                )
+                db.add(instrument)
             
             db.commit()
-            logger.info(f"Seeded {len(stocks)} instruments from {list_name}")
+            logger.info(f"Seeded {len(unique_stocks)} instruments from {list_name}")
             return True
             
         finally:
