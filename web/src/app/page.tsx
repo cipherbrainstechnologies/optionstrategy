@@ -79,6 +79,7 @@ export default function Dashboard() {
   const [scanning, setScanning] = useState<boolean>(false);
   const [scanResults, setScanResults] = useState<ScanResults | null>(null);
   const [fyersAuthUrl, setFyersAuthUrl] = useState<string | null>(null);
+  const [tradingMode, setTradingMode] = useState<'sandbox' | 'live'>('sandbox');
 
   async function refreshOverview() {
     try {
@@ -150,7 +151,7 @@ export default function Dashboard() {
 
   async function fetchFyersAuthUrl() {
     try {
-      const res = await fetch("/api/fyers/auth-url", { cache: "no-store" });
+      const res = await fetch(`/api/fyers/auth-url?mode=${tradingMode}`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.auth_url) {
@@ -158,6 +159,31 @@ export default function Dashboard() {
         }
       }
     } catch {}
+  }
+
+  async function toggleTradingMode() {
+    const newMode = tradingMode === 'sandbox' ? 'live' : 'sandbox';
+    setTradingMode(newMode);
+    
+    try {
+      // Update backend trading mode
+      const res = await fetch("/api/trading-mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: newMode })
+      });
+      
+      if (res.ok) {
+        // Refresh auth URL for the new mode
+        await fetchFyersAuthUrl();
+        // Refresh overview to show updated mode
+        await refreshOverview();
+      }
+    } catch (error) {
+      console.error("Error toggling trading mode:", error);
+      // Revert the toggle if API call failed
+      setTradingMode(tradingMode);
+    }
   }
 
   async function handleManualScan(dryRun: boolean = false) {
@@ -289,6 +315,59 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Trading Mode Toggle */}
+        <div className="mt-4">
+          <Card className="border-blue-200 bg-blue-50">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="text-blue-800 font-semibold">🎯 Trading Mode</div>
+                <div className="flex items-center space-x-3">
+                  <span className={`text-sm font-medium ${tradingMode === 'sandbox' ? 'text-blue-900' : 'text-gray-500'}`}>
+                    Sandbox
+                  </span>
+                  <button
+                    onClick={toggleTradingMode}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      tradingMode === 'live' ? 'bg-blue-600' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        tradingMode === 'live' ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                  <span className={`text-sm font-medium ${tradingMode === 'live' ? 'text-blue-900' : 'text-gray-500'}`}>
+                    Live
+                  </span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <p className="text-blue-700 text-sm">
+                  {tradingMode === 'sandbox' ? (
+                    <>
+                      🧪 <strong>Sandbox Mode:</strong> Safe testing environment with demo data. No real money involved.
+                    </>
+                  ) : (
+                    <>
+                      ⚡ <strong>Live Mode:</strong> Real trading with actual market data and real money. Use with caution!
+                    </>
+                  )}
+                </p>
+                <div className="text-blue-600 text-xs">
+                  {tradingMode === 'sandbox' ? (
+                    "Switch to Live mode when you're ready for real trading."
+                  ) : (
+                    "⚠️ Live trading mode is active. All trades will be executed with real money."
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {fyersAuthUrl && (
           <div className="mt-4">

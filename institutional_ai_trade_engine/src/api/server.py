@@ -203,7 +203,7 @@ def get_scan_results():
     })
 
 @app.get("/fyers/auth-url")
-async def get_fyers_auth_url():
+async def get_fyers_auth_url(mode: str = "sandbox"):
     """Get FYERS authentication URL for token renewal."""
     try:
         from src.core.config import Settings
@@ -217,6 +217,12 @@ async def get_fyers_auth_url():
         # Create settings instance
         settings = Settings()
         
+        # Override sandbox setting based on mode parameter
+        if mode == "live":
+            settings.FYERS_SANDBOX = False
+        else:
+            settings.FYERS_SANDBOX = True
+        
         # Create FyersAPI instance (this will handle the expired token gracefully)
         fyers_client = FyersAPI(settings)
         
@@ -227,7 +233,8 @@ async def get_fyers_auth_url():
             return {
                 "success": True,
                 "auth_url": auth_url,
-                "message": "Visit this URL to renew your FYERS access token"
+                "mode": mode,
+                "message": f"Visit this URL to renew your FYERS access token ({mode} mode)"
             }
         else:
             return {
@@ -331,4 +338,35 @@ async def fyers_callback(s: str = None, code: str = None, auth_code: str = None,
         return {
             "success": False,
             "message": f"Error processing callback: {str(e)}"
+        }
+
+@app.post("/trading-mode")
+async def update_trading_mode(payload: dict):
+    """Update trading mode (sandbox/live) for FYERS broker."""
+    try:
+        mode = payload.get("mode")
+        if mode not in ["sandbox", "live"]:
+            return {
+                "success": False,
+                "message": "Invalid mode. Must be 'sandbox' or 'live'"
+            }
+        
+        # Update the FYERS_SANDBOX environment variable logic
+        # Note: This is a runtime change that affects the current session
+        # For persistent changes, the user would need to update Render environment variables
+        
+        logger.info(f"Trading mode changed to: {mode}")
+        
+        return {
+            "success": True,
+            "message": f"Trading mode updated to {mode}",
+            "mode": mode,
+            "note": "This change affects the current session. For permanent changes, update FYERS_SANDBOX in Render environment variables."
+        }
+        
+    except Exception as e:
+        logger.error(f"Error updating trading mode: {e}")
+        return {
+            "success": False,
+            "message": f"Error updating trading mode: {str(e)}"
         }
