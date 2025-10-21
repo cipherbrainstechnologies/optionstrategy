@@ -201,3 +201,44 @@ def get_scan_results():
         "breakouts": [],
         "errors": []
     })
+
+@app.get("/fyers/auth-url")
+async def get_fyers_auth_url():
+    """Get FYERS authentication URL for token renewal."""
+    try:
+        from src.core.config import Settings
+        
+        # Create a temporary FyersAPI instance to get the auth URL
+        try:
+            from src.data.fyers_client import FyersAPI
+        except Exception:
+            from src.data.fyers_client import FyersAPI
+        
+        # Create settings instance
+        settings = Settings()
+        
+        # Create FyersAPI instance (this will handle the expired token gracefully)
+        fyers_client = FyersAPI(settings)
+        
+        # Get the auth URL
+        auth_url = fyers_client.get_auth_url()
+        
+        if auth_url:
+            return {
+                "success": True,
+                "auth_url": auth_url,
+                "message": "Visit this URL to renew your FYERS access token"
+            }
+        else:
+            return {
+                "success": False,
+                "auth_url": None,
+                "message": "Failed to generate FYERS auth URL"
+            }
+            
+    except Exception as e:
+        return {
+            "success": False,
+            "auth_url": None,
+            "message": f"Error generating auth URL: {str(e)}"
+        }

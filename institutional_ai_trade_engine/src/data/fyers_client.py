@@ -122,22 +122,29 @@ class FyersAPI(BrokerBase):
             if response.get('s') == 'ok':
                 logger.info("FYERS token is valid")
                 return True
-            elif response.get('code') == -16:  # Authentication error
+            elif response.get('code') in [-16, -17]:  # Authentication errors
                 logger.warning("FYERS token expired - manual renewal required")
                 
                 # Generate auth URL for manual renewal
                 auth_url = self.get_auth_url()
                 if auth_url:
-                    logger.info("=" * 80)
-                    logger.info("FYERS TOKEN RENEWAL REQUIRED")
-                    logger.info("=" * 80)
-                    logger.info("1. Visit this URL to authenticate:")
-                    logger.info(f"   {auth_url}")
-                    logger.info("2. Complete the OAuth flow")
-                    logger.info("3. Copy the new access token")
-                    logger.info("4. Update your environment variable FYERS_ACCESS_TOKEN")
-                    logger.info("5. Restart the application")
-                    logger.info("=" * 80)
+                    logger.error("=" * 80)
+                    logger.error("🔑 FYERS TOKEN RENEWAL REQUIRED 🔑")
+                    logger.error("=" * 80)
+                    logger.error("❌ Your FYERS access token has expired!")
+                    logger.error("")
+                    logger.error("🔗 AUTHENTICATION URL:")
+                    logger.error(f"   {auth_url}")
+                    logger.error("")
+                    logger.error("📋 STEPS TO RENEW:")
+                    logger.error("   1. Click the URL above to open FYERS login")
+                    logger.error("   2. Complete the OAuth authentication")
+                    logger.error("   3. Copy the new access token from the response")
+                    logger.error("   4. Update FYERS_ACCESS_TOKEN in Render dashboard")
+                    logger.error("   5. Restart the application")
+                    logger.error("")
+                    logger.error("⚠️  The system will continue with MockExchange until token is renewed")
+                    logger.error("=" * 80)
                 else:
                     logger.error("Failed to generate FYERS auth URL")
                 

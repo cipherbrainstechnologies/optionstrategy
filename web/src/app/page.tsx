@@ -78,6 +78,7 @@ export default function Dashboard() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [scanning, setScanning] = useState<boolean>(false);
   const [scanResults, setScanResults] = useState<ScanResults | null>(null);
+  const [fyersAuthUrl, setFyersAuthUrl] = useState<string | null>(null);
 
   async function refreshOverview() {
     try {
@@ -123,6 +124,7 @@ export default function Dashboard() {
     refreshOverview();
     refreshPositions();
     refreshScanResults();
+    fetchFyersAuthUrl();
     const i = setInterval(() => {
       refreshOverview();
     }, 60000);
@@ -142,6 +144,18 @@ export default function Dashboard() {
       });
       if (action === "refresh") {
         await Promise.all([refreshOverview(), refreshPositions()]);
+      }
+    } catch {}
+  }
+
+  async function fetchFyersAuthUrl() {
+    try {
+      const res = await fetch("/api/fyers/auth-url", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.auth_url) {
+          setFyersAuthUrl(data.auth_url);
+        }
       }
     } catch {}
   }
@@ -275,6 +289,45 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {fyersAuthUrl && (
+          <div className="mt-4">
+            <Card className="border-orange-200 bg-orange-50">
+              <CardHeader>
+                <div className="flex items-center space-x-2">
+                  <div className="text-orange-800 font-semibold">🔑 FYERS Token Renewal Required</div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <p className="text-orange-700 text-sm">
+                    Your FYERS access token has expired. The system is currently using MockExchange for testing.
+                  </p>
+                  <div className="space-y-2">
+                    <p className="text-orange-700 text-sm font-medium">To renew your token:</p>
+                    <ol className="text-orange-700 text-sm space-y-1 ml-4">
+                      <li>1. Click the authentication URL below</li>
+                      <li>2. Complete the OAuth login process</li>
+                      <li>3. Copy the new access token</li>
+                      <li>4. Update FYERS_ACCESS_TOKEN in Render dashboard</li>
+                      <li>5. Restart the application</li>
+                    </ol>
+                  </div>
+                  <div className="mt-4">
+                    <a 
+                      href={fyersAuthUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors text-sm font-medium"
+                    >
+                      🔗 Open FYERS Authentication
+                    </a>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         <TabsContent value="scanner" className="mt-4">
           <Card>
