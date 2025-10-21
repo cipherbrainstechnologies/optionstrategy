@@ -54,6 +54,16 @@ class FyersAPI(BrokerBase):
         if not log_path.endswith('/'):
             log_path += '/'
         
+        # If LOG_PATH points to a file, use its directory instead
+        import os
+        if os.path.isfile(log_path.rstrip('/')):
+            log_path = os.path.dirname(log_path.rstrip('/')) + '/'
+        
+        # Ensure the directory exists
+        os.makedirs(log_path, exist_ok=True)
+        
+        logger.info(f"FYERS log path configured: {log_path}")
+        
         # Initialize FYERS client using official v3 API
         self.client = fyersModel.FyersModel(
             token=settings.FYERS_ACCESS_TOKEN,
