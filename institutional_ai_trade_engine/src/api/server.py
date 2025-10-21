@@ -39,6 +39,7 @@ scan_status = {"running": False, "last_scan": None, "results": None}
 def ensure_instruments_seeded():
     """Ensure instruments table has stock symbols."""
     try:
+        logging.info("Checking if instruments are already seeded...")
         with engine.connect() as conn:
             result = conn.execute(text("SELECT COUNT(*) as count FROM instruments WHERE enabled = 1"))
             row = result.first()
@@ -56,15 +57,23 @@ def ensure_instruments_seeded():
             else:
                 logging.error("Failed to seed instruments")
     except Exception as e:
+        import traceback
         logging.error(f"Error checking/seeding instruments: {e}")
+        logging.error(f"Traceback: {traceback.format_exc()}")
 
 @app.on_event("startup")
 def startup_event():
     try:
+        logging.info("Starting application initialization...")
         init_database()
+        logging.info("Database initialized successfully")
         ensure_instruments_seeded()
+        logging.info("Application startup completed successfully")
     except Exception as e:
+        import traceback
         logging.error(f"Startup error: {e}")
+        logging.error(f"Traceback: {traceback.format_exc()}")
+        # Don't let startup errors crash the app - continue with limited functionality
 
 @app.get("/health")
 def health_check():
