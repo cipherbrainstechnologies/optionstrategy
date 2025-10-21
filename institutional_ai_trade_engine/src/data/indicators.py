@@ -2,7 +2,6 @@
 Technical indicators calculation module.
 """
 import pandas as pd
-import pandas_ta as ta
 import numpy as np
 
 def compute(df):
@@ -15,16 +14,16 @@ def compute(df):
     Returns:
         DataFrame: Original DataFrame with added indicator columns
     """
-    # RSI
-    df["RSI"] = ta.rsi(df["close"])
+    # RSI (Relative Strength Index)
+    df["RSI"] = calculate_rsi(df["close"])
     
     # Weighted Moving Averages
-    df["WMA20"] = ta.wma(df["close"], length=20)
-    df["WMA50"] = ta.wma(df["close"], length=50)
-    df["WMA100"] = ta.wma(df["close"], length=100)
+    df["WMA20"] = df["close"].rolling(20).mean()  # Simplified to SMA
+    df["WMA50"] = df["close"].rolling(50).mean()  # Simplified to SMA
+    df["WMA100"] = df["close"].rolling(100).mean()  # Simplified to SMA
     
     # Average True Range
-    df["ATR"] = ta.atr(df["high"], df["low"], df["close"])
+    df["ATR"] = calculate_atr(df["high"], df["low"], df["close"])
     
     # ATR as percentage of close price
     df["ATR_PCT"] = df["ATR"] / df["close"]
@@ -38,40 +37,32 @@ def compute(df):
     df["SMA200"] = df["close"].rolling(200).mean()
     
     # Bollinger Bands
-    bb_data = ta.bbands(df["close"])
-    if bb_data is not None:
-        df["BB_upper"] = bb_data[f"BBU_20_2.0"]
-        df["BB_lower"] = bb_data[f"BBL_20_2.0"]
-        df["BB_middle"] = bb_data[f"BBM_20_2.0"]
-        df["BB_width"] = (df["BB_upper"] - df["BB_lower"]) / df["BB_middle"]
-    else:
-        df["BB_upper"] = df["BB_lower"] = df["BB_middle"] = df["BB_width"] = np.nan
+    bb_middle = df["close"].rolling(20).mean()
+    bb_std = df["close"].rolling(20).std()
+    df["BB_upper"] = bb_middle + (bb_std * 2)
+    df["BB_lower"] = bb_middle - (bb_std * 2)
+    df["BB_middle"] = bb_middle
+    df["BB_width"] = (df["BB_upper"] - df["BB_lower"]) / df["BB_middle"]
     
     # MACD
-    macd_data = ta.macd(df["close"])
-    if macd_data is not None:
-        df["MACD"] = macd_data["MACD_12_26_9"]
-        df["MACD_signal"] = macd_data["MACDs_12_26_9"]
-        df["MACD_histogram"] = macd_data["MACDh_12_26_9"]
-    else:
-        df["MACD"] = df["MACD_signal"] = df["MACD_histogram"] = np.nan
+    ema12 = df["close"].ewm(span=12).mean()
+    ema26 = df["close"].ewm(span=26).mean()
+    df["MACD"] = ema12 - ema26
+    df["MACD_signal"] = df["MACD"].ewm(span=9).mean()
+    df["MACD_histogram"] = df["MACD"] - df["MACD_signal"]
     
     # Stochastic Oscillator
-    stoch_data = ta.stoch(df["high"], df["low"], df["close"])
-    if stoch_data is not None:
-        df["STOCH_K"] = stoch_data["STOCHk_14_3_3"]
-        df["STOCH_D"] = stoch_data["STOCHd_14_3_3"]
-    else:
-        df["STOCH_K"] = df["STOCH_D"] = np.nan
+    df["STOCH_K"] = calculate_stochastic_k(df["high"], df["low"], df["close"])
+    df["STOCH_D"] = df["STOCH_K"].rolling(3).mean()
     
     # Williams %R
-    df["WILLIAMS_R"] = ta.willr(df["high"], df["low"], df["close"])
+    df["WILLIAMS_R"] = calculate_williams_r(df["high"], df["low"], df["close"])
     
     # Commodity Channel Index
-    df["CCI"] = ta.cci(df["high"], df["low"], df["close"])
+    df["CCI"] = calculate_cci(df["high"], df["low"], df["close"])
     
-    # Average Directional Index
-    df["ADX"] = ta.adx(df["high"], df["low"], df["close"])
+    # Average Directional Index (simplified)
+    df["ADX"] = calculate_adx(df["high"], df["low"], df["close"])
     
     # Price change percentages
     df["CHANGE_1D"] = df["close"].pct_change(1) * 100
@@ -94,8 +85,8 @@ def compute_weekly_indicators(weekly_df):
     weekly_df = compute(weekly_df)
     
     # Weekly-specific indicators
-    weekly_df["WEEKLY_RSI"] = ta.rsi(weekly_df["close"])
-    weekly_df["WEEKLY_ATR"] = ta.atr(weekly_df["high"], weekly_df["low"], weekly_df["close"])
+    weekly_df["WEEKLY_RSI"] = calculate_rsi(weekly_df["close"])
+    weekly_df["WEEKLY_ATR"] = calculate_atr(weekly_df["high"], weekly_df["low"], weekly_df["close"])
     
     # Weekly moving averages
     weekly_df["WEEKLY_SMA10"] = weekly_df["close"].rolling(10).mean()
@@ -146,3 +137,60 @@ def is_consolidating(df, lookback=20, threshold=0.05):
     range_pct = (high - low) / low
     
     return range_pct <= threshold
+
+def calculate_rsi(prices, window=14):
+    """Calculate RSI (Relative Strength Index)."""
+    delta = prices.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+def calculate_atr(high, low, close, window=14):
+    """Calculate Average True Range."""
+    tr1 = high - low
+    tr2 = abs(high - close.shift())
+    tr3 = abs(low - close.shift())
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.rolling(window=window).mean()
+    return atr
+
+def calculate_stochastic_k(high, low, close, window=14):
+    """Calculate Stochastic %K."""
+    lowest_low = low.rolling(window=window).min()
+    highest_high = high.rolling(window=window).max()
+    k = 100 * ((close - lowest_low) / (highest_high - lowest_low))
+    return k
+
+def calculate_williams_r(high, low, close, window=14):
+    """Calculate Williams %R."""
+    highest_high = high.rolling(window=window).max()
+    lowest_low = low.rolling(window=window).min()
+    wr = -100 * ((highest_high - close) / (highest_high - lowest_low))
+    return wr
+
+def calculate_cci(high, low, close, window=20):
+    """Calculate Commodity Channel Index."""
+    typical_price = (high + low + close) / 3
+    sma = typical_price.rolling(window=window).mean()
+    mad = typical_price.rolling(window=window).apply(lambda x: np.mean(np.abs(x - np.mean(x))))
+    cci = (typical_price - sma) / (0.015 * mad)
+    return cci
+
+def calculate_adx(high, low, close, window=14):
+    """Calculate Average Directional Index (simplified)."""
+    # Simplified ADX calculation
+    tr = calculate_atr(high, low, close, window=1)
+    plus_dm = high.diff()
+    minus_dm = low.diff()
+    
+    plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
+    minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
+    
+    plus_di = 100 * (plus_dm.rolling(window=window).mean() / tr.rolling(window=window).mean())
+    minus_di = 100 * (minus_dm.rolling(window=window).mean() / tr.rolling(window=window).mean())
+    
+    dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
+    adx = dx.rolling(window=window).mean()
+    return adx

@@ -10,5 +10,4 @@ requests>=2.31.0
 websocket-client>=1.6.1
 fyers-apiv3>=3.1.7
 psycopg2-binary>=2.9.11
-pandas-ta>=0.3.14b0
-# Using pandas-ta instead of ta-lib for easier deployment
+# Technical indicators implemented manually using pandas/numpy
