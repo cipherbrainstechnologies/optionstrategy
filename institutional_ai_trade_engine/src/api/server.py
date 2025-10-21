@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
@@ -42,6 +42,24 @@ def startup_event():
         init_database()
     except Exception:
         pass
+
+@app.get("/")
+def root():
+    """Root endpoint - API information and available endpoints."""
+    return {
+        "name": "Institutional AI Trade Engine API",
+        "version": "2.0.0",
+        "status": "running",
+        "broker": os.getenv("BROKER", "FYERS"),
+        "mode": "SANDBOX" if os.getenv("FYERS_SANDBOX", "true").lower() == "true" else "LIVE",
+        "endpoints": {
+            "health": "/health",
+            "overview": "/overview",
+            "positions": "/positions",
+            "scan": "/scan",
+            "docs": "/docs"
+        }
+    }
 
 @app.get("/health")
 def health_check():
