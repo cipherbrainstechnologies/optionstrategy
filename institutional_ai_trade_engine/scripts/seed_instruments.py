@@ -84,9 +84,37 @@ def seed_instruments(list_name: str):
         # Insert stocks into database
         db = get_db_session()
         try:
-            # Clear existing instruments
-            db.execute(text("DELETE FROM instruments"))
-            db.commit()
+            # Check if we're using PostgreSQL and fix the schema if needed
+            from src.core.config import Config
+            config = Config()
+            if config.DATABASE_URL.startswith("postgresql://"):
+                # Fix PostgreSQL auto-increment issue by recreating the table
+                logger.info("Detected PostgreSQL, ensuring proper auto-increment setup...")
+                try:
+                    # Drop and recreate the table with proper SERIAL column
+                    db.execute(text("DROP TABLE IF EXISTS instruments CASCADE"))
+                    db.execute(text("""
+                        CREATE TABLE instruments(
+                            id SERIAL PRIMARY KEY,
+                            symbol VARCHAR(50) UNIQUE NOT NULL,
+                            exchange VARCHAR(20) DEFAULT 'NSE',
+                            enabled INTEGER DEFAULT 1,
+                            in_portfolio INTEGER DEFAULT 0,
+                            avg_portfolio_price REAL,
+                            portfolio_qty INTEGER
+                        )
+                    """))
+                    db.execute(text("CREATE INDEX IF NOT EXISTS idx_instruments_enabled ON instruments(enabled)"))
+                    db.execute(text("CREATE INDEX IF NOT EXISTS idx_instruments_portfolio ON instruments(in_portfolio)"))
+                    db.commit()
+                    logger.info("Recreated instruments table with proper PostgreSQL SERIAL column")
+                except Exception as e:
+                    logger.warning(f"Failed to recreate table: {e}")
+                    db.rollback()
+            else:
+                # Clear existing instruments for SQLite
+                db.execute(text("DELETE FROM instruments"))
+                db.commit()
             
             # Remove duplicates and insert new instruments
             unique_stocks = list(set(stocks))
