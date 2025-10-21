@@ -6,6 +6,9 @@ from datetime import datetime
 from typing import List, Dict
 import pandas as pd
 
+# Initialize logger first
+logger = logging.getLogger(__name__)
+
 try:
     from ..data.fetch import DataFetcher  # type: ignore
     from ..data.indicators import compute  # type: ignore
@@ -43,9 +46,8 @@ except Exception:
     except ImportError:
         SHEETS_AVAILABLE = False
         logger.warning("Google Sheets integration not available - alerts will be skipped")
-from sqlalchemy import text
 
-logger = logging.getLogger(__name__)
+from sqlalchemy import text
 
 class Scanner:
     """Scanner for 3WI setups and breakouts."""
