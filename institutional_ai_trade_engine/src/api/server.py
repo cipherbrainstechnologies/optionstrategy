@@ -242,3 +242,93 @@ async def get_fyers_auth_url():
             "auth_url": None,
             "message": f"Error generating auth URL: {str(e)}"
         }
+
+@app.get("/callback")
+async def fyers_callback(s: str = None, code: str = None, auth_code: str = None, state: str = None):
+    """Handle FYERS OAuth callback and display access token."""
+    try:
+        if s == "ok" and auth_code:
+            # Successfully received auth code
+            logger.info("FYERS OAuth callback received successfully")
+            logger.info(f"Auth code: {auth_code}")
+            
+            # Decode the JWT token to get information
+            try:
+                import jwt
+                import json
+                
+                # Decode without verification to get payload (this is safe for display purposes)
+                decoded = jwt.decode(auth_code, options={"verify_signature": False})
+                
+                # Extract relevant information
+                app_id = decoded.get('app_id', 'Unknown')
+                display_name = decoded.get('display_name', 'Unknown')
+                exp_time = decoded.get('exp', 0)
+                
+                # Convert timestamp to readable format
+                from datetime import datetime
+                exp_datetime = datetime.fromtimestamp(exp_time) if exp_time else None
+                
+                return {
+                    "success": True,
+                    "message": "FYERS Authentication Successful!",
+                    "auth_code": auth_code,
+                    "app_id": app_id,
+                    "display_name": display_name,
+                    "expires_at": exp_datetime.isoformat() if exp_datetime else None,
+                    "instructions": [
+                        "1. Copy the auth_code above",
+                        "2. Go to your Render dashboard",
+                        "3. Update the FYERS_ACCESS_TOKEN environment variable",
+                        "4. Restart your application",
+                        "5. Your scanner will now use live FYERS data!"
+                    ]
+                }
+                
+            except Exception as decode_error:
+                logger.error(f"Error decoding JWT: {decode_error}")
+                return {
+                    "success": True,
+                    "message": "FYERS Authentication Successful!",
+                    "auth_code": auth_code,
+                    "instructions": [
+                        "1. Copy the auth_code above",
+                        "2. Go to your Render dashboard", 
+                        "3. Update the FYERS_ACCESS_TOKEN environment variable",
+                        "4. Restart your application",
+                        "5. Your scanner will now use live FYERS data!"
+                    ]
+                }
+                
+        elif s == "error":
+            # Authentication failed
+            error_msg = f"FYERS authentication failed: {code}" if code else "Unknown error"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "message": error_msg,
+                "instructions": [
+                    "1. Check your FYERS credentials",
+                    "2. Make sure your app is properly configured",
+                    "3. Try the authentication process again"
+                ]
+            }
+        else:
+            # Invalid callback
+            return {
+                "success": False,
+                "message": "Invalid callback parameters",
+                "received": {
+                    "s": s,
+                    "code": code,
+                    "auth_code": auth_code,
+                    "state": state
+                }
+            }
+            
+    except Exception as e:
+        logger.error(f"Error handling FYERS callback: {e}")
+        return {
+            "success": False,
+            "message": f"Error processing callback: {str(e)}"
+        }
