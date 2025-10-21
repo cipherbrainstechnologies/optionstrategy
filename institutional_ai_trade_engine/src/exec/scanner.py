@@ -189,8 +189,7 @@ class Scanner:
                     })
                     continue
             
-            scan_results["valid_setups"] = valid_setups
-            logger.info(f"Scan completed: {len(valid_setups)} setups found")
+            logger.info(f"Scan completed: {len(scan_results.get('valid_setups', []))} setups found")
             return scan_results
             
         except Exception as e:
