@@ -8,6 +8,7 @@ import pandas as pd
 
 try:
     from ..data.fetch import DataFetcher  # type: ignore
+    from ..data.indicators import compute  # type: ignore
     from ..strategy.three_week_inside import detect_3wi, breakout, is_near_breakout, calculate_breakout_strength  # type: ignore
     from ..strategy.filters import filters_ok, get_filter_score  # type: ignore
     from ..storage.db import get_db_session  # type: ignore
@@ -18,6 +19,7 @@ try:
     from ..core.config import Config  # type: ignore
 except Exception:
     from src.data.fetch import DataFetcher  # type: ignore
+    from src.data.indicators import compute  # type: ignore
     from src.strategy.three_week_inside import detect_3wi, breakout, is_near_breakout, calculate_breakout_strength  # type: ignore
     from src.strategy.filters import filters_ok, get_filter_score  # type: ignore
     from src.storage.db import get_db_session  # type: ignore
@@ -94,7 +96,8 @@ class Scanner:
                         "strategy_status": "No Pattern",
                         "mother_high": None,
                         "mother_low": None,
-                        "quality_score": 0
+                        "quality_score": 0,
+                        "scanned_at": datetime.now().isoformat()
                     }
                     
                     # Detect 3WI patterns
@@ -114,7 +117,7 @@ class Scanner:
                                 instrument_result["strategy_status"] = "Valid Setup"
                                 instrument_result["quality_score"] = get_filter_score(latest)
                                 
-                                valid_setups.append({
+                                scan_results["valid_setups"].append({
                                     'symbol': symbol,
                                     'pattern': pattern,
                                     'weekly_data': weekly_df,
@@ -398,16 +401,20 @@ class Scanner:
             logger.info("Starting scanner run...")
             
             # Scan for new setups
-            setups = self.scan_all_instruments()
-            logger.info(f"Found {len(setups)} new setups")
+            scan_results = self.scan_all_instruments()
+            logger.info(f"Found {len(scan_results.get('valid_setups', []))} new setups")
             
             # Check for breakouts
             breakouts = self.check_breakouts()
             logger.info(f"Found {len(breakouts)} confirmed breakouts")
             
+            # Return properly structured results
             results = {
-                "setups": setups,
+                "total_instruments": scan_results.get("total_instruments", 0),
+                "scanned_instruments": scan_results.get("scanned_instruments", []),
+                "valid_setups": scan_results.get("valid_setups", []),
                 "breakouts": breakouts,
+                "errors": scan_results.get("errors", []),
                 "dry_run": dry_run,
                 "timestamp": datetime.now().isoformat()
             }
@@ -418,11 +425,13 @@ class Scanner:
         except Exception as e:
             logger.error(f"Error in scanner run: {e}")
             return {
-                "setups": [],
+                "total_instruments": 0,
+                "scanned_instruments": [],
+                "valid_setups": [],
                 "breakouts": [],
+                "errors": [{"error": str(e)}],
                 "dry_run": dry_run,
-                "timestamp": datetime.now().isoformat(),
-                "error": str(e)
+                "timestamp": datetime.now().isoformat()
             }
 
 # Global scanner instance

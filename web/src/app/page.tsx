@@ -46,6 +46,7 @@ type ScanResult = {
   mother_high: number | null;
   mother_low: number | null;
   quality_score: number;
+  scanned_at?: string;
 };
 
 type ScanResults = {
@@ -175,6 +176,10 @@ export default function Dashboard() {
           const statusRes = await fetch("/api/scan/status", { cache: "no-store" });
           if (statusRes.ok) {
             const status = await statusRes.json();
+            
+            // Refresh scan results during scan to show progress
+            await refreshScanResults();
+            
             if (!status.running) {
               setScanning(false);
               clearInterval(pollInterval);
@@ -366,6 +371,7 @@ export default function Dashboard() {
                           <TableHead>Patterns</TableHead>
                           <TableHead>Filters</TableHead>
                           <TableHead>Status</TableHead>
+                          <TableHead>Last Scanned</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -400,6 +406,15 @@ export default function Dashboard() {
                                 "bg-gray-100 text-gray-800"
                               }`}>
                                 {result.strategy_status}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-xs text-muted-foreground">
+                                {result.scanned_at ? new Date(result.scanned_at).toLocaleTimeString('en-US', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  second: '2-digit'
+                                }) : '-'}
                               </span>
                             </TableCell>
                           </TableRow>
