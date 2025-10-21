@@ -141,8 +141,8 @@ class Instrument(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     symbol = Column(String(50), unique=True, nullable=False)
     exchange = Column(String(20), default="NSE")
-    enabled = Column(Boolean, default=True)
-    in_portfolio = Column(Boolean, default=False)  # New field for portfolio-only mode
+    enabled = Column(Integer, default=1)  # 1 = True, 0 = False for PostgreSQL compatibility
+    in_portfolio = Column(Integer, default=0)  # 1 = True, 0 = False for PostgreSQL compatibility
     avg_portfolio_price = Column(Float)  # If already held
     portfolio_qty = Column(Integer)  # If already held
 
@@ -157,7 +157,7 @@ class Setup(Base):
     mother_high = Column(Float, nullable=False)
     mother_low = Column(Float, nullable=False)
     inside_weeks = Column(Integer, default=2)
-    matched_filters = Column(Boolean, default=False)
+    matched_filters = Column(Integer, default=0)  # 1 = True, 0 = False for PostgreSQL compatibility
     quality_score = Column(Float)  # 0-100
     comment = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)

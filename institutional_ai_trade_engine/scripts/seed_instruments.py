@@ -95,7 +95,7 @@ def seed_instruments(list_name: str):
                 instrument = Instrument(
                     symbol=symbol,
                     exchange="NSE",
-                    enabled=True
+                    enabled=1  # Use integer 1 for PostgreSQL compatibility
                 )
                 db.add(instrument)
             
