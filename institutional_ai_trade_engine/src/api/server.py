@@ -1,10 +1,12 @@
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import os
 from typing import List
 import asyncio
 import logging
+from pathlib import Path
 
 from src.storage.db import init_database, engine
 from sqlalchemy import text
@@ -97,6 +99,32 @@ def root():
 def health_check():
     """Health check endpoint for deployment monitoring."""
     return {"status": "ok", "message": "Trading Engine API is running"}
+
+@app.get("/token-manager", response_class=HTMLResponse)
+async def token_manager_page():
+    """Serve the token manager web interface."""
+    try:
+        html_path = Path(__file__).parent / "templates" / "token_manager.html"
+        if html_path.exists():
+            return html_path.read_text()
+        else:
+            return """
+            <html>
+                <body>
+                    <h1>Token Manager</h1>
+                    <p>Template file not found. Please check deployment.</p>
+                </body>
+            </html>
+            """
+    except Exception as e:
+        return f"""
+        <html>
+            <body>
+                <h1>Error</h1>
+                <p>Error loading token manager: {str(e)}</p>
+            </body>
+        </html>
+        """
 
 @app.get("/overview")
 def get_overview():
@@ -269,77 +297,138 @@ async def get_fyers_auth_url(mode: str = "sandbox"):
         }
 
 @app.get("/callback")
-async def fyers_callback(s: str = None, code: str = None, auth_code: str = None, state: str = None):
-    """Handle FYERS OAuth callback and display access token."""
+async def fyers_callback(
+    s: str = None, 
+    code: str = None, 
+    auth_code: str = None, 
+    state: str = None,
+    auto_update: bool = True
+):
+    """
+    Handle FYERS OAuth callback, exchange auth_code for tokens,
+    and optionally update Render environment variables.
+    """
     try:
         if s == "ok" and auth_code:
-            # Successfully received auth code
             logger.info("FYERS OAuth callback received successfully")
-            logger.info(f"Auth code: {auth_code}")
+            logger.info(f"Auth code: {auth_code[:20]}...")
             
-            # Decode the JWT token to get information
-            try:
-                import jwt
-                import json
-                
-                # Decode without verification to get payload (this is safe for display purposes)
-                decoded = jwt.decode(auth_code, options={"verify_signature": False})
-                
-                # Extract relevant information
-                app_id = decoded.get('app_id', 'Unknown')
-                display_name = decoded.get('display_name', 'Unknown')
-                exp_time = decoded.get('exp', 0)
-                
-                # Convert timestamp to readable format
-                from datetime import datetime
-                exp_datetime = datetime.fromtimestamp(exp_time) if exp_time else None
-                
+            # Exchange auth_code for tokens
+            from .token_manager import FyersTokenManager, RenderEnvManager
+            from src.core.config import Settings
+            
+            settings = Settings()
+            
+            # Initialize token manager
+            token_manager = FyersTokenManager(
+                client_id=settings.FYERS_CLIENT_ID,
+                secret_key=settings.FYERS_SECRET_KEY,
+                sandbox=settings.FYERS_SANDBOX
+            )
+            
+            # Exchange auth_code for both tokens
+            token_result = token_manager.exchange_auth_code(auth_code)
+            
+            if not token_result.get("success"):
                 return {
-                    "success": True,
-                    "message": "FYERS Authentication Successful!",
-                    "auth_code": auth_code,
-                    "app_id": app_id,
-                    "display_name": display_name,
-                    "expires_at": exp_datetime.isoformat() if exp_datetime else None,
-                    "instructions": [
-                        "1. Copy the auth_code above",
-                        "2. Go to your Render dashboard",
-                        "3. Update the FYERS_ACCESS_TOKEN environment variable",
-                        "4. Restart your application",
-                        "5. Your scanner will now use live FYERS data!"
-                    ]
-                }
-                
-            except Exception as decode_error:
-                logger.error(f"Error decoding JWT: {decode_error}")
-                return {
-                    "success": True,
-                    "message": "FYERS Authentication Successful!",
+                    "success": False,
+                    "message": token_result.get("message"),
                     "auth_code": auth_code,
                     "instructions": [
-                        "1. Copy the auth_code above",
-                        "2. Go to your Render dashboard", 
-                        "3. Update the FYERS_ACCESS_TOKEN environment variable",
-                        "4. Restart your application",
-                        "5. Your scanner will now use live FYERS data!"
+                        "Token exchange failed.",
+                        "You can try again or update tokens manually in Render dashboard."
                     ]
                 }
+            
+            access_token = token_result.get("access_token")
+            refresh_token = token_result.get("refresh_token")
+            
+            logger.info("✅ Successfully received both tokens from FYERS")
+            
+            # Auto-update Render environment variables if requested
+            update_result = None
+            if auto_update:
+                logger.info("Attempting to update Render environment variables...")
+                env_manager = RenderEnvManager()
+                
+                variables = {
+                    "FYERS_ACCESS_TOKEN": access_token
+                }
+                
+                # Only update refresh token if provided
+                if refresh_token:
+                    variables["FYERS_REFRESH_TOKEN"] = refresh_token
+                
+                update_result = env_manager.update_env_vars(variables)
+            
+            # Prepare response
+            response = {
+                "success": True,
+                "message": "🎉 FYERS Authentication Successful!",
+                "tokens": {
+                    "access_token": access_token,
+                    "refresh_token": refresh_token if refresh_token else "Not provided by FYERS"
+                },
+                "mode": "SANDBOX" if settings.FYERS_SANDBOX else "LIVE"
+            }
+            
+            # Add update status
+            if update_result:
+                if update_result.get("success"):
+                    response["auto_update"] = {
+                        "status": "success",
+                        "message": update_result.get("message"),
+                        "method": update_result.get("method")
+                    }
+                    response["instructions"] = [
+                        "✅ Tokens automatically updated in Render!",
+                        "🔄 Please restart your Render service to apply changes:",
+                        "   1. Go to Render Dashboard",
+                        "   2. Click 'Manual Deploy' → 'Clear build cache & deploy'",
+                        "   OR click the restart button",
+                        "",
+                        "⏰ Your tokens will auto-refresh daily at 08:45 IST"
+                    ]
+                else:
+                    response["auto_update"] = {
+                        "status": "failed",
+                        "message": update_result.get("message"),
+                        "method": "manual"
+                    }
+                    response["instructions"] = [
+                        "⚠️ Automatic update failed. Please update manually:",
+                        "",
+                        "📋 Copy these to Render Environment Variables:",
+                        "",
+                        f"FYERS_ACCESS_TOKEN={access_token}",
+                        f"FYERS_REFRESH_TOKEN={refresh_token}" if refresh_token else "",
+                        "",
+                        "Then restart your application."
+                    ]
+            else:
+                response["instructions"] = [
+                    "📋 Add these to Render Environment Variables:",
+                    "",
+                    f"FYERS_ACCESS_TOKEN={access_token}",
+                    f"FYERS_REFRESH_TOKEN={refresh_token}" if refresh_token else "",
+                    "",
+                    "Then restart your application."
+                ]
+            
+            return response
                 
         elif s == "error":
-            # Authentication failed
             error_msg = f"FYERS authentication failed: {code}" if code else "Unknown error"
             logger.error(error_msg)
             return {
                 "success": False,
                 "message": error_msg,
                 "instructions": [
-                    "1. Check your FYERS credentials",
-                    "2. Make sure your app is properly configured",
-                    "3. Try the authentication process again"
+                    "Authentication failed.",
+                    "Check your FYERS credentials and try again."
                 ]
             }
         else:
-            # Invalid callback
             return {
                 "success": False,
                 "message": "Invalid callback parameters",
@@ -353,6 +442,8 @@ async def fyers_callback(s: str = None, code: str = None, auth_code: str = None,
             
     except Exception as e:
         logger.error(f"Error handling FYERS callback: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return {
             "success": False,
             "message": f"Error processing callback: {str(e)}"
