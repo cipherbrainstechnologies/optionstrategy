@@ -51,9 +51,9 @@ type ScanResult = {
 type ScanResults = {
   total_instruments: number;
   scanned_instruments: ScanResult[];
-  valid_setups: any[];
-  breakouts: any[];
-  errors: any[];
+  valid_setups: ScanResult[];
+  breakouts: ScanResult[];
+  errors: string[];
 };
 
 function StatCard(props: { title: string; value: string | number | boolean; suffix?: string; color?: string }) {
@@ -183,12 +183,12 @@ export default function Dashboard() {
               await refreshScanResults();
             }
           }
-        } catch (e) {
+        } catch {
           // Ignore polling errors
         }
       }, 2000);
       
-    } catch (error) {
+    } catch {
       alert("Failed to start manual scan");
       setScanning(false);
     }
