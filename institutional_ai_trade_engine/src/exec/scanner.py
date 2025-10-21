@@ -14,9 +14,17 @@ try:
     from ..storage.db import get_db_session  # type: ignore
     from ..storage.ledger import log_trade  # type: ignore
     from ..alerts.telegram import send_trade_alert  # type: ignore
-    from ..alerts.sheets import update_master_sheet  # type: ignore
     from ..core.risk import size_position, calculate_targets, check_risk_limits  # type: ignore
     from ..core.config import Config  # type: ignore
+    
+    # Optional imports that might not be available
+    try:
+        from ..alerts.sheets import update_master_sheet  # type: ignore
+        SHEETS_AVAILABLE = True
+    except ImportError:
+        SHEETS_AVAILABLE = False
+        logger.warning("Google Sheets integration not available - alerts will be skipped")
+        
 except Exception:
     from src.data.fetch import DataFetcher  # type: ignore
     from src.data.indicators import compute  # type: ignore
@@ -25,9 +33,16 @@ except Exception:
     from src.storage.db import get_db_session  # type: ignore
     from src.storage.ledger import log_trade  # type: ignore
     from src.alerts.telegram import send_trade_alert  # type: ignore
-    from src.alerts.sheets import update_master_sheet  # type: ignore
     from src.core.risk import size_position, calculate_targets, check_risk_limits  # type: ignore
     from src.core.config import Config  # type: ignore
+    
+    # Optional imports that might not be available
+    try:
+        from src.alerts.sheets import update_master_sheet  # type: ignore
+        SHEETS_AVAILABLE = True
+    except ImportError:
+        SHEETS_AVAILABLE = False
+        logger.warning("Google Sheets integration not available - alerts will be skipped")
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
@@ -365,7 +380,10 @@ class Scanner:
             # Send alerts
             if not self.dry_run:
                 send_trade_alert(position, "NEW_POSITION")
-                update_master_sheet(position, "NEW_POSITION")
+                if SHEETS_AVAILABLE:
+                    update_master_sheet(position, "NEW_POSITION")
+                else:
+                    logger.info("Skipping Google Sheets update - integration not available")
             
             logger.info(f"Created position for {symbol}: {direction} breakout")
             return position
