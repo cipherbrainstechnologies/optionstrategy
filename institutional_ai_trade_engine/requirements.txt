@@ -11,3 +11,4 @@ websocket-client>=1.6.1
 fyers-apiv3>=3.1.7
 psycopg2-binary>=2.9.11
 ta-lib>=0.4.28
+# Force rebuild to install ta-lib
