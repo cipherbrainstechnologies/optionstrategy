@@ -91,15 +91,24 @@ def seed_instruments(list_name: str):
             # Remove duplicates and insert new instruments
             unique_stocks = list(set(stocks))
             for symbol in unique_stocks:
-                # Use SQLAlchemy ORM for proper auto-increment handling
-                instrument = Instrument(
-                    symbol=symbol,
-                    exchange="NSE",
-                    enabled=1  # Use integer 1 for PostgreSQL compatibility
-                )
-                db.add(instrument)
-            
-            db.commit()
+                # Use raw SQL with explicit PostgreSQL handling
+                try:
+                    db.execute(text("""
+                        INSERT INTO instruments (symbol, exchange, enabled, in_portfolio, avg_portfolio_price, portfolio_qty)
+                        VALUES (:symbol, :exchange, :enabled, :in_portfolio, :avg_portfolio_price, :portfolio_qty)
+                    """), {
+                        "symbol": symbol,
+                        "exchange": "NSE", 
+                        "enabled": 1,
+                        "in_portfolio": 0,
+                        "avg_portfolio_price": None,
+                        "portfolio_qty": None
+                    })
+                    db.commit()
+                except Exception as e:
+                    logger.warning(f"Failed to insert {symbol}: {e}")
+                    db.rollback()
+                    continue
             logger.info(f"Seeded {len(unique_stocks)} instruments from {list_name}")
             return True
             
