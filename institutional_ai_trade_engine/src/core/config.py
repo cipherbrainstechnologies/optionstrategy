@@ -27,6 +27,7 @@ class Settings:
     FYERS_REDIRECT_URI: Optional[str] = os.getenv("FYERS_REDIRECT_URI")
     FYERS_SECRET_KEY: Optional[str] = os.getenv("FYERS_SECRET_KEY")
     FYERS_ACCESS_TOKEN: Optional[str] = os.getenv("FYERS_ACCESS_TOKEN")
+    FYERS_REFRESH_TOKEN: Optional[str] = os.getenv("FYERS_REFRESH_TOKEN")  # For automatic token renewal (30-day validity)
     FYERS_SANDBOX: bool = os.getenv("FYERS_SANDBOX", "true").lower() == "true"
     
     # Angel One (future)

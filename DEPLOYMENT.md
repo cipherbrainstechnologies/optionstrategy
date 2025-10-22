@@ -189,9 +189,18 @@ NEXT_PUBLIC_API_BASE_URL=https://your-backend-url.render.com
 
 ### Regular Tasks
 
-1. **Token Refresh**: Fyers tokens expire, refresh monthly
+1. **Token Refresh**: 
+   - **Automatic**: Daily at 08:45 IST (FYERS access token)
+   - **Manual**: Once every 30 days (FYERS refresh token)
+   - See [TOKEN_REFRESH_GUIDE.md](institutional_ai_trade_engine/TOKEN_REFRESH_GUIDE.md) for details
+   
 2. **Database Backup**: Neon provides automatic backups
-3. **Monitoring**: Check service health regularly
+
+3. **Monitoring**: 
+   - Check service health regularly
+   - Monitor daily token refresh logs
+   - Alert on token refresh failures
+   
 4. **Updates**: Keep dependencies updated
 
 ### Backup Strategy

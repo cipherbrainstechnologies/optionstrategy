@@ -925,10 +925,113 @@ def startup_event():
 
 ---
 
+### Challenge #012 – FYERS Token Expiration and Automatic Refresh
+
+- **Date Discovered**: 2025-10-21
+- **Severity**: 🔴 Critical
+- **Status**: ✅ Solved
+- **Category**: API Integration, Authentication
+- **Owner**: FYERS Integration Team
+
+**Description**:
+FYERS API v3 access tokens expire after 12 hours, requiring manual renewal for 24/7 autonomous trading. Without automatic refresh, the system would fail after half a day of operation.
+
+**Impact**:
+- System becomes non-functional after 12 hours
+- Manual intervention required daily
+- Violates "autonomous operation" principle
+- Missed trading opportunities during downtime
+- Unsuitable for production deployment
+
+**Root Cause**:
+- FYERS security policy: access tokens have 12-hour validity
+- Refresh tokens have 30-day validity (API v3)
+- Initial implementation only checked token validity, didn't refresh
+- No scheduled renewal mechanism
+
+**Token Lifecycle (FYERS API v3)**:
+```
+Token Type          Purpose                      Expiry        Renewal Method
+─────────────────  ───────────────────────────  ────────────  ──────────────────
+Authorization Code  OAuth redirect callback     30 seconds    One-time use
+Access Token        API requests                12 hours      Via refresh token
+Refresh Token       Token renewal               30 days       Manual OAuth renewal
+```
+
+**Solution** (Implemented):
+
+**1. Created `src/data/fyers_refresh.py`**:
+- Automatic token refresh using FYERS API v3
+- SHA256 app ID hash generation
+- Automatic .env file updates
+- Graceful error handling with fallback to MockExchange
+
+**2. Added Scheduled Job**:
+```python
+# In scheduler.py - Daily token refresh at 08:45 IST (before market hours)
+s.add_job(
+    fyers_refresh.run_scheduled_refresh,
+    "cron",
+    day_of_week="mon-fri",
+    hour=8,
+    minute=45,
+    id="fyers_token_refresh"
+)
+```
+
+**3. Configuration Updates**:
+- Added `FYERS_REFRESH_TOKEN` to Settings class in config.py
+- Updated env.example with refresh token field
+- Updated documentation with token lifecycle
+
+**Workflow**:
+```
+Day 1 (Initial Setup):
+  1. User completes OAuth flow
+  2. Receives access_token + refresh_token
+  3. Adds both to .env file
+  
+Daily (Automatic):
+  1. Job runs at 08:45 IST
+  2. Checks token validity
+  3. Refreshes using refresh_token
+  4. Updates .env with new access_token
+  5. System continues seamlessly
+  
+Day 30 (Refresh Token Expires):
+  1. Refresh fails with expiry error
+  2. System logs renewal instructions
+  3. Falls back to MockExchange
+  4. User completes OAuth (one-time)
+  5. System resumes for another 30 days
+```
+
+**Benefits**:
+- ✅ Fully autonomous for 30 days (vs 12 hours previously)
+- ✅ Only 1 manual renewal per month
+- ✅ Zero downtime during refresh
+- ✅ Automatic .env file updates
+- ✅ Clear error messages and recovery path
+- ✅ Production-ready for 24/7 operation
+
+**Status**: ✅ Solved
+- Automatic refresh implemented
+- Scheduled daily at 08:45 IST
+- 30-day autonomous operation
+- Graceful error handling
+- Documentation updated
+
+**Related**:
+- Challenge #001 (Angel One token expiration - similar problem)
+- Decision #009 (FYERS-first architecture)
+- DEPLOYMENT.md (Token refresh maintenance)
+
+---
+
 ## Challenge Statistics
 
-**Total Challenges**: 11
-- Critical: 3 (2 solved, 1 mitigated)
+**Total Challenges**: 12
+- Critical: 4 (3 solved, 1 mitigated)
 - High: 3 (3 mitigated)
 - Medium: 4 (3 open/future, 1 mitigated)
 - Low: 3 (3 mitigated)
