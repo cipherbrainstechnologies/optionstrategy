@@ -11,6 +11,8 @@ from pathlib import Path
 from src.storage.db import init_database, engine
 from sqlalchemy import text
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Institutional AI Trade Engine API")
 
 origins = [

@@ -17,7 +17,8 @@ export default function CallbackPage() {
         const state = searchParams.get('state');
 
         // Forward the callback to the backend
-        const response = await fetch(`https://optionstrategy-rj2e.onrender.com/callback?s=${s}&code=${code}&auth_code=${auth_code}&state=${state}`);
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://optionstrategy-rj2e.onrender.com';
+        const response = await fetch(`${API_BASE_URL}/callback?s=${s}&code=${code}&auth_code=${auth_code}&state=${state}`);
         const data = await response.json();
 
         if (data.success) {
